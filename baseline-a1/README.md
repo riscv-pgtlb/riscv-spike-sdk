@@ -17,3 +17,6 @@
 2. 重新打包 rootfs：`./pack-rootfs.sh /path/to/target /path/to/output.cpio.gz`
 
 *注：目前为已验证的启动基线，尚未完成从源码重建的验证。*
+
+
+
