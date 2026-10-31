@@ -20,7 +20,8 @@ toolchain_dest := $(CURDIR)/toolchain
 buildroot_srcdir := $(srcdir)/buildroot
 buildroot_initramfs_wrkdir := $(topdir)/rootfs/buildroot_initramfs
 buildroot_initramfs_tar := $(buildroot_initramfs_wrkdir)/images/rootfs.tar
-buildroot_initramfs_config := $(confdir)/buildroot_initramfs_config
+# buildroot_initramfs_config := $(confdir)/buildroot_initramfs_config
+buildroot_initramfs_config := $(confdir)/buildroot_base_defconfig
 buildroot_initramfs_sysroot_stamp := $(wrkdir)/.buildroot_initramfs_sysroot
 buildroot_initramfs_sysroot := $(topdir)/rootfs/buildroot_initramfs_sysroot
 
@@ -86,11 +87,17 @@ $(toolchain_dest)/bin/$(target_newlib)-gcc:
 		--enable-multilib
 	$(MAKE) -C $(toolchain_wrkdir) 
 
-$(buildroot_initramfs_wrkdir)/.config: $(buildroot_srcdir)
-	rm -rf $(dir $@)
-	mkdir -p $(dir $@)
-	cp $(buildroot_initramfs_config) $@
-	$(MAKE) -C $< RISCV=$(RISCV) PATH="$(PATH)" O=$(buildroot_initramfs_wrkdir) olddefconfig CROSS_COMPILE=riscv64-unknown-linux-gnu-
+# $(buildroot_initramfs_wrkdir)/.config: $(buildroot_srcdir)
+# 	rm -rf $(dir $@)
+# 	mkdir -p $(dir $@)
+# 	cp $(buildroot_initramfs_config) $@
+# 	$(MAKE) -C $< RISCV=$(RISCV) PATH="$(PATH)" O=$(buildroot_initramfs_wrkdir) olddefconfig CROSS_COMPILE=riscv64-unknown-linux-gnu-
+# 根据保存的配置生成 Buildroot 构建配置。
+$(buildroot_initramfs_wrkdir)/.config: $(buildroot_initramfs_config)
+	mkdir -p "$(buildroot_initramfs_wrkdir)"
+	cp "$(buildroot_initramfs_config)" "$@"
+	$(MAKE) -C "$(buildroot_srcdir)" \
+		O="$(buildroot_initramfs_wrkdir)" olddefconfig
 
 $(buildroot_initramfs_tar): $(buildroot_srcdir) $(buildroot_initramfs_wrkdir)/.config $(RISCV)/bin/$(target_linux)-gcc $(buildroot_initramfs_config)
 	$(MAKE) -C $< RISCV=$(RISCV) PATH="$(PATH)" O=$(buildroot_initramfs_wrkdir)
@@ -99,7 +106,8 @@ $(buildroot_initramfs_tar): $(buildroot_srcdir) $(buildroot_initramfs_wrkdir)/.c
 buildroot-menuconfig: $(buildroot_initramfs_wrkdir)/.config $(buildroot_srcdir)
 	$(MAKE) -C $(dir $<) O=$(buildroot_initramfs_wrkdir) menuconfig
 	$(MAKE) -C $(dir $<) O=$(buildroot_initramfs_wrkdir) savedefconfig
-	cp $(dir $<)/defconfig conf/buildroot_initramfs_config
+# 	cp $(dir $<)/defconfig conf/buildroot_initramfs_config
+	cp "$(dir $<)/defconfig" "$(buildroot_initramfs_config)"
 
 $(buildroot_initramfs_sysroot): $(buildroot_initramfs_tar)
 	mkdir -p $(buildroot_initramfs_sysroot)
@@ -135,22 +143,6 @@ $(vmlinux): $(linux_srcdir) $(linux_wrkdir)/.config
 		CROSS_COMPILE=$(target_linux)- \
 		ARCH=riscv \
 		Image modules
-
-# 完整构建入口：编译内核、模块，并将模块安装到暂存目录。
-# 输出：
-#   build/linux/arch/riscv/boot/Image
-#   build/kvm-modules/lib/modules/<内核版本>/
-.PHONY: linux-build
-linux-build: $(linux_wrkdir)/.config
-	$(MAKE) -C "$(linux_srcdir)" O="$(linux_wrkdir)" \
-		CROSS_COMPILE=$(target_linux)- \
-		ARCH=riscv \
-		Image modules
-	$(MAKE) -C "$(linux_srcdir)" O="$(linux_wrkdir)" \
-		CROSS_COMPILE=$(target_linux)- \
-		ARCH=riscv \
-		INSTALL_MOD_PATH="$(wrkdir)/kvm-modules" \
-		modules_install
 
 $(vmlinux_stripped): $(vmlinux)
 	$(target_linux)-strip -o $@ $<
@@ -269,9 +261,47 @@ SD_CARD ?= /dev/sdb
 make_sd: $(bbl)
 	sudo dd if=$(bbl).bin of=$(SD_CARD)1 bs=4096
 
+# 从源码构建 OpenSBI，并安装到启动镜像目录。
+.PHONY: opensbi-build
+opensbi-build: $(toolchain_dest)/bin/$(target_linux)-gcc
+	$(MAKE) -C "$(opensbi_srcdir)" \
+		O="$(opensbi_wrkdir)" \
+		PLATFORM=generic \
+		CROSS_COMPILE="$(toolchain_dest)/bin/$(target_linux)-" \
+		FW_TEXT_START=0x80000000 \
+		FW_JUMP_ADDR=0x80200000
+	install -D -m 0644 \
+		"$(opensbi_wrkdir)/platform/generic/firmware/fw_jump.bin" \
+		"$(KVM_IMAGE_DIR)/fw_jump.bin"
+
 # 构建并安装 QEMU，不启动虚拟机。
 .PHONY: qemu-build
 qemu-build: $(qemu)
+
+# 构建基础用户空间，并安装生成的 initramfs。
+.PHONY: rootfs-base
+rootfs-base: $(buildroot_initramfs_wrkdir)/.config
+	$(MAKE) -C "$(buildroot_srcdir)" \
+		O="$(buildroot_initramfs_wrkdir)"
+	install -D -m 0644 \
+		"$(buildroot_initramfs_wrkdir)/images/rootfs.cpio.gz" \
+		"$(topdir)/images/base/rootfs.cpio.gz"
+
+# 完整构建入口：编译内核、模块，并将模块安装到暂存目录。
+# 输出：
+#   build/linux/arch/riscv/boot/Image
+#   build/kvm-modules/lib/modules/<内核版本>/
+.PHONY: linux-build
+linux-build: $(linux_wrkdir)/.config
+	$(MAKE) -C "$(linux_srcdir)" O="$(linux_wrkdir)" \
+		CROSS_COMPILE=$(target_linux)- \
+		ARCH=riscv \
+		Image modules
+	$(MAKE) -C "$(linux_srcdir)" O="$(linux_wrkdir)" \
+		CROSS_COMPILE=$(target_linux)- \
+		ARCH=riscv \
+		INSTALL_MOD_PATH="$(wrkdir)/kvm-modules" \
+		modules_install
 
 # 构建 RISC-V 设备树库，供 kvmtool 链接使用。
 .PHONY: libfdt-build
@@ -292,7 +322,7 @@ kvmtool-build: libfdt-build
 
 # 构建内核、模块和 lkvm，然后生成外层 rootfs 候选镜像。
 .PHONY: rootfs-kvm
-rootfs-kvm: linux-build kvmtool-build
+rootfs-kvm: rootfs-base linux-build kvmtool-build
 	bash "$(topdir)/scripts/pack-kvm-rootfs.sh"
 
 # 启动镜像所在目录，可在命令行覆盖：
@@ -305,12 +335,6 @@ DEBIAN_DISK ?= $(topdir)/images/debian/debian-guest.raw
 KVM_DISK ?=
 KVM_NET_ARGS ?=
 KVM_DISK_ARGS = -drive "file=$(KVM_DISK),format=raw,if=none,id=debian" -device virtio-blk-device,drive=debian
-
-# 将 Debian 磁盘传入外层系统，登录后执行 run-debian。
-.PHONY: run-debian-host
-run-debian-host: KVM_DISK = $(DEBIAN_DISK)
-run-debian-host: KVM_NET_ARGS = -netdev user,id=hostnet -device virtio-net-device,netdev=hostnet
-run-debian-host: run-kvm-host
 
 # 启动支持 KVM 的外层 RISC-V Linux；内层 guest 需登录后通过 lkvm 启动。
 # 依赖 QEMU 程序，并检查固件、内核和 rootfs 是否可读。
@@ -332,3 +356,9 @@ run-kvm-host: $(qemu)
 		$(if $(KVM_DISK),$(KVM_DISK_ARGS)) \
 		$(KVM_NET_ARGS) \
 		-append "console=ttyS0 earlycon=sbi rdinit=/sbin/init"
+
+# 将 Debian 磁盘传入外层系统，登录后执行 run-debian。
+.PHONY: run-debian-host
+run-debian-host: KVM_DISK = $(DEBIAN_DISK)
+run-debian-host: KVM_NET_ARGS = -netdev user,id=hostnet -device virtio-net-device,netdev=hostnet
+run-debian-host: run-kvm-host

@@ -4,7 +4,8 @@
 
 已通过 SDK 默认工具链构建 Linux、KVM 模块、libfdt 和静态 lkvm，并验证 Buildroot guest、Debian guest 的启动。Debian 已验证 DNS、APT 索引更新、hello 软件包安装与运行。kvmtool 当前使用原始提交，不再自动应用 TCP 数据量限制补丁。
 
-QEMU 网络构建已通过当前工作区验证，但尚未在全新目录执行完整下载、构建测试。基础 rootfs、OpenSBI 固件仍使用同学提供的预构建文件。
+QEMU 网络构建已通过当前工作区验证，但尚未在全新目录执行完整下载、构建测试。
+基础 rootfs 已通过 Buildroot 从源码构建，使用 Bootlin 外部工具链；OpenSBI 已使用 SDK 工具链构建。新固件、基础 rootfs、KVM 模块加载、guest 启动及 Debian DNS 已完成验证。尚未进行全新工作区的完整重建测试。
 
 ## 启动链与目录
 
@@ -22,12 +23,14 @@ x86_64 Ubuntu 服务器
 | repo/linux                        | Linux 源码 |
 | repo/kvmtool、repo/dtc            | lkvm 与设备树库源码 |
 | repo/riscv-gnu-toolchain/qemu     | 统一使用的 QEMU 源码 |
+| images/base/rootfs.cpio.gz	    | make rootfs-base 生成的基础 rootfs |
+| images/kvm/fw_jump.bin	        | make opensbi-build 生成的固件 |
+| conf/buildroot_base_defconfig	    | 当前基础 rootfs 的构建配置 |
+| conf/rootfs-overlay/	            | 加入 rootfs 的初始化配置 |
 | conf/linux_defconfig              | 实际用于内核构建的配置，含 CONFIG_KVM=m |
 | conf/kvm                          | 原 A1 基线配置记录；Buildroot 配置目前不参与 KVM 打包 |
 | build/linux                       | 新内核和模块编译输出 |
 | build/kvm-modules                 | 按内核版本安装的模块暂存目录 |
-| images/base/rootfs.cpio.gz        | 预构建基础 rootfs 输入 |
-| images/kvm/fw_jump.bin            | 预构建 OpenSBI 输入 |
 | images/kvm/rootfs-kvm-new.cpio.gz | 自动生成的外层 initramfs |
 | images/debian/debian-guest.raw    | 可写 Debian guest 磁盘 |
 | scripts                           | 打包及 guest 启动脚本 |
@@ -38,19 +41,13 @@ x86_64 Ubuntu 服务器
 
 需要本机 C/C++ 编译环境、Git、Make、Python、QEMU 的开发依赖，以及 cpio、gzip、设备树库构建所需工具。无 sudo 的构建依赖已安装的系统开发环境；并不表示一台空白服务器无需准备依赖。
 
-从基线提供者取得 rootfs 与固件，分别放入：
+基础 rootfs 和 OpenSBI 固件由后面的构建命令生成，不需要另外取得预构建镜像。images/ 保存生成产物，不提交 Git。历史基线校验值仅用于识别原始镜像，不用于校验重新构建的产物。
 
 ```text
 images/base/rootfs.cpio.gz
 images/kvm/fw_jump.bin
 ```
 
-它们没有随 Git 提交，也尚未提供公共下载地址。可用以下命令核对当前
-已验证输入，清单见 input-images.sha256：
-
-```sh
-sha256sum -c docs/input-images.sha256
-```
 
 初始化子模块时按需下载，避免无条件递归下载整个工具链的所有组件：
 
@@ -65,7 +62,13 @@ git -C repo/riscv-gnu-toolchain submodule update --init -- qemu
 
 ```sh
 make -j4 "$PWD/toolchain/bin/riscv64-unknown-linux-gnu-gcc"
+# 构建模拟器
 make -j4 qemu-build
+
+# 构建并安装固件
+make -j4 opensbi-build
+
+# 构建基础 rootfs、内核、模块和 lkvm，并打包
 make -j4 rootfs-kvm
 ```
 
@@ -84,7 +87,7 @@ git -C repo/riscv-gnu-toolchain config submodule.binutils.url https://sourceware
 git -C repo/riscv-gnu-toolchain config submodule.gdb.url https://sourceware.org/git/binutils-gdb.git
 ```
 
-rootfs-kvm 依次处理依赖：Linux Image/modules、模块暂存、libfdt、lkvm，再由 scripts/pack-kvm-rootfs.sh 打包。libfdt 和 lkvm 当前在各自源码目录内构建；切换工具链或移动目录后，须处理旧对象文件与依赖路径。
+rootfs-kvm 等待基础 rootfs、Linux 内核与模块、lkvm 构建完成后，再调用打包脚本。使用 -j 时，这些独立构建可以并行执行。
 
 打包脚本使用新临时目录收集模块、lkvm、启动脚本和 guest 文件，生成新增 cpio.gz，并拼接基础归档。Linux 按顺序解包这些 initramfs 归档。脚本结束后删除临时目录，不使用旧 build/rootfs-extra。
 

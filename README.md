@@ -5,7 +5,7 @@
 ## RISC-V KVM 实验
 
 当前分支的 KVM 构建、Buildroot/Debian guest 启动及验证说明见
-[KVM 操作指南](docs/kvm.md)、[Debian 镜像准备](docs/debian-guest.md)
+[KVM 操作指南](docs/kvm-guide.md)、[Debian 镜像准备](docs/debian-guest.md)
 和 [QEMU 网络构建](docs/qemu-network.md)。后续原 SDK 的 Spike 使用说明
 保留作参考；本分支已更换默认内核配置，原 Spike 流程尚未重新验证。
 
@@ -40,7 +40,8 @@ libglib2.0-dev libpixman-1-dev git rsync wget cpio
 git clone https://github.com/riscv-zju/riscv-rss-sdk.git
 
 # For people who only want to have a try
-sh quickstart.sh
+# sh quickstart.sh
+sh scripts/quickstart.sh
 # For people who want to develop the whole system
 git submodule update --init --recursive --progress
 

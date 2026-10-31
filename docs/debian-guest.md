@@ -29,7 +29,7 @@ fdisk -l images/debian/debian-guest.raw
 
 ## 首次初始化：在 guest 内完成，无需服务器 sudo
 
-先在 Ubuntu 上完成 [构建](kvm.md)，再执行：
+先在 Ubuntu 上完成 [构建](kvm-guide.md)，再执行：
 
 ```sh
 make run-debian-host
@@ -116,7 +116,7 @@ apt-get install --no-install-recommends hello
 hello
 ```
 
-已验证 hello 输出 Hello, world!。大文件下载曾在 lkvm 用户态网络中出现超时，当前已恢复原版 kvmtool；单次原版下载成功不代表长期稳定性测试已完成。故障分析与版本范围见 [kvm.md](kvm.md)。
+已验证 hello 输出 Hello, world!。大文件下载曾在 lkvm 用户态网络中出现超时，当前已恢复原版 kvmtool；单次原版下载成功不代表长期稳定性测试已完成。故障分析与版本范围见 [kvm-guide.md](kvm-guide.md)。
 
 只需要安装二进制软件时，可备份到 /root 后将 debian.sources 中的Types: deb deb-src 改为 Types: deb，减少源码索引下载。不要关闭签名检查。本实验也使用过 Acquire::Languages=none 跳过翻译索引。
 
