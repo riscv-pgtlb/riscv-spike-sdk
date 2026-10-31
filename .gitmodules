@@ -19,3 +19,9 @@
 [submodule "repo/riscv-openocd"]
 	path = repo/riscv-openocd
 	url = https://github.com/riscv-collab/riscv-openocd.git
+[submodule "repo/kvmtool"]
+	path = repo/kvmtool
+	url = https://github.com/kvmtool/kvmtool.git
+[submodule "repo/dtc"]
+	path = repo/dtc
+	url = https://git.kernel.org/pub/scm/utils/dtc/dtc.git

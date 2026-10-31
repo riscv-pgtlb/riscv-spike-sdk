@@ -2,6 +2,13 @@
 
 # RISC-V Spike Simulator SDK
 
+## RISC-V KVM 实验
+
+当前分支的 KVM 构建、Buildroot/Debian guest 启动及验证说明见
+[KVM 操作指南](docs/kvm.md)、[Debian 镜像准备](docs/debian-guest.md)
+和 [QEMU 网络构建](docs/qemu-network.md)。后续原 SDK 的 Spike 使用说明
+保留作参考；本分支已更换默认内核配置，原 Spike 流程尚未重新验证。
+
 In the recent version of the riscv-tools and freedom-u-sdk, both of them removed the support of the spike simulator, and tutorials about running Linux on spike is using static compiled busybox, which is not suitable for real test environments. Spike is the simplest simulator of RISC-V, it has a very clear description of the instructions, you can apply your ideas and check it for a quick try. The **R**ISC-V **S**pike **S**imulator SDK wants to help people to test design with 64-bit Linux environment on Spike easily, the basic framework is based on Freedom U SDK version 1.0.
 
 This SDK will provide great convenience for the following people who:

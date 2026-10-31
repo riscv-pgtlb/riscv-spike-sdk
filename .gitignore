@@ -5,6 +5,7 @@
 
 .idea/
 work/
+/work-archive/
 
 
 # toolchian
@@ -20,3 +21,9 @@ compile_commands.json
 
 # debug
 log
+
+# QEMU source extracted from a pinned release archive
+/repo/qemu/
+
+# Generated boot images
+/images/
