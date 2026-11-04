@@ -1,0 +1,3 @@
+ce8824d59eaa83f43e6aeb3827f52128be39838fadf01ada9133018a44e00a93  /home/czy/work/linux-build-pmp-virt-guard-test/arch/riscv/boot/Image
+7c28ea1f27fe1f8b8d69b7920f1c73f5a3b6ed9cde1d7355aa6b3f13b48bf7c0  /home/czy/work/linux-build-pmp-virt-guard-test/.config
+f928092e55ef2dcd7e36d4bca577993feb0359ea289928e17ed1b954602aaad0  /home/czy/work/opensbi-build-pmp-virt-guard-test/platform/generic/firmware/fw_jump.bin
