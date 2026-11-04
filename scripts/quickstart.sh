@@ -29,11 +29,14 @@ done
 cd $root
 }
 
-root="$(dirname "$(readlink -f "$0")")"
+# root="$(dirname "$(readlink -f "$0")")"
+root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 NJOB=4
 
-root_repo_list=${ROOT_LIST:-"buildroot riscv-gnu-toolchain riscv-pk linux riscv-isa-sim"}
-toolchain_repo_list=${TOOLCHAIN_LIST:-"binutils gcc glibc newlib gdb"}
+# root_repo_list=${ROOT_LIST:-"buildroot riscv-gnu-toolchain riscv-pk linux riscv-isa-sim"}
+root_repo_list=${ROOT_LIST:-"buildroot riscv-gnu-toolchain riscv-pk linux riscv-isa-sim opensbi dtc kvmtool"}
+# toolchain_repo_list=${TOOLCHAIN_LIST:-"binutils gcc glibc newlib gdb"}
+toolchain_repo_list=${TOOLCHAIN_LIST:-"binutils gcc glibc newlib gdb qemu"}
 
 fetch_repo "$root/repo" "$root_repo_list" "--jobs $NJOB"
 fetch_repo "$root/repo/riscv-gnu-toolchain" "$toolchain_repo_list" "--recursive --jobs $NJOB"

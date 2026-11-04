@@ -1,5 +1,8 @@
 # Baseline A1: 普通启动基线
 
+本页保存同学交付 A1 时的历史验证状态，不代表当前 KVM 集成进度。
+当前操作入口和验证结果见 [kvm-guide.md](kvm-guide.md)。
+
 ## 当前状态
 - **已验证**：OpenSBI -> Linux 6.17.2 -> initramfs -> root shell 的启动链跑通。
 - **已验证**：新 rootfs 的 devtmpfs 挂载和设备节点正常。
@@ -13,7 +16,11 @@
 - Buildroot: 2025.08 (提交 3386677f0a4d1c0150e772eb07cede05e88a2d6d)
 
 ## 构建与启动
-1. 启动普通基线系统：`./run-qemu.sh`
-2. 重新打包 rootfs：`./pack-rootfs.sh /path/to/target /path/to/output.cpio.gz`
+请优先使用当前 KVM 操作指南中的 Makefile 入口。
+
+原基线脚本已移除。当前构建和启动方法见 [KVM 操作指南](kvm-guide.md)。本页仅记录 A1 交付时的状态
 
 *注：目前为已验证的启动基线，尚未完成从源码重建的验证。*
+
+baseline-a1-inputs.sha256 保存同学提供的原始镜像校验值，其中路径是当时的存放位置，不适用于当前重新构建的产物。
+
