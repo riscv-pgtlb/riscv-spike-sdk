@@ -1,5 +1,0 @@
-f055e8a8aa50cd0e282d9dd6907efd39ed7e8d588558f48ffa2a0f173ba9b3e8  /home/czy/work/linux-build-pmp-virt-user-control/arch/riscv/boot/Image
-7c28ea1f27fe1f8b8d69b7920f1c73f5a3b6ed9cde1d7355aa6b3f13b48bf7c0  /home/czy/work/linux-build-pmp-virt-user-control/.config
-f03c6fddf736447d20fb77140d473029af6275870838f583c78df53dbc9f961c  /home/czy/work/opensbi-build-pmp-virt-user/platform/generic/firmware/fw_jump.bin
-fc1e8a28ca5b518996734c0b2a16f82ec268e4309422195da8adb851bbeeaf70  build/control-overlay/pv-user-test
-a89049521394a830095f9abf11c9b4aeeb46a8b1347687ec6de7417627c9bec3  build/rootfs-user-control.cpio.gz

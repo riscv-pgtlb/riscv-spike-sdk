@@ -362,3 +362,24 @@ run-kvm-host: $(qemu)
 run-debian-host: KVM_DISK = $(DEBIAN_DISK)
 run-debian-host: KVM_NET_ARGS = -netdev user,id=hostnet -device virtio-net-device,netdev=hostnet
 run-debian-host: run-kvm-host
+
+# -------------------------------------------------
+# PMP.Virt + KVM 联合实验入口
+VIRT_PYTHON ?= python3
+VIRT_JOBS ?= 4
+VIRT_SCRIPT := $(topdir)/pmp-virt/scripts/virt-kvm.py
+
+.PHONY: virt-build run-virt-host
+
+# 构建组件并打包 rootfs；内部会检查和准备源码
+virt-build:
+	$(VIRT_PYTHON) -u "$(VIRT_SCRIPT)" build -j "$(VIRT_JOBS)"
+
+# 校验并启动，不自动构建
+run-virt-host:
+	$(VIRT_PYTHON) "$(VIRT_SCRIPT)" run
+
+# 使用现有 DEBIAN_DISK 变量传入 Debian raw 磁盘。
+.PHONY: run-virt-debian-host
+run-virt-debian-host:
+	VIRT_DEBIAN_DISK="$(DEBIAN_DISK)" $(VIRT_PYTHON) "$(VIRT_SCRIPT)" run

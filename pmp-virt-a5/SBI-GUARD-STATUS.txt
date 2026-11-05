@@ -1,7 +1,0 @@
-OpenSBI guard: 8fc4245
-Linux guard test: c9da5377f
-本轮启动、HS 6/6、U/HS 同页及封存前后 SBI 拒绝测试通过。
-opensbi.patch 和 linux-protected.patch 已替换为包含本轮修改的完整补丁。
-固件白名单从启动起生效；未适配的 SBI 服务被禁用。
-旧日志与校验记录对应旧实验；guard-test 文件对应本轮实验。
-尚未完成：剩余可信路径审计、根表切换回归、完整环境重建及 KVM 集成。

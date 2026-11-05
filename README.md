@@ -2,6 +2,11 @@
 
 # RISC-V Spike Simulator SDK
 
+## PMP.Virt + KVM 联合实验
+
+受保护 host、普通 Linux guest 的构建与运行入口见
+[PMP.Virt 联合实验指南](pmp-virt/README.md)。
+
 ## RISC-V KVM 实验
 
 当前分支的 KVM 构建、Buildroot/Debian guest 启动及验证说明见

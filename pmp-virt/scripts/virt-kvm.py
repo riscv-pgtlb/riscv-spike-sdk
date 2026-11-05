@@ -13,10 +13,10 @@ import sys
 import tempfile
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 WORK = ROOT / "build" / "virt-kvm"
-PACKAGE = ROOT / "pmp-virt-a5"
-SDK = Path(os.environ.get("SOURCE_SDK", str(Path.home() / "work/riscv-spike-sdk"))).resolve()
+PACKAGE = ROOT / "pmp-virt"
+SDK = Path(os.environ.get("SOURCE_SDK", str(ROOT))).resolve()
 RAM_BASE = 0x80000000
 RAM_SIZE = 2048 * 1024 * 1024
 LOAD_ADDRESS = 0x80200000
@@ -68,12 +68,12 @@ def write_json(path, value):
     temporary.replace(path)
 
 
-def verify_a5():
+def verify_inputs():
     for record in (PACKAGE / "SHA256SUMS").read_text().splitlines():
         expected, filename = record.split(maxsplit=1)
         path = (PACKAGE / filename.removeprefix("*")).resolve()
         if not path.is_relative_to(PACKAGE.resolve()) or digest(path) != expected:
-            fail(f"A5 checksum mismatch: {filename}")
+            fail(f"PMP.Virt input checksum mismatch: {filename}")
 
 
 def require_checkout():
@@ -195,11 +195,11 @@ def validate_rootfs(base):
 def source_inputs(name):
     paths = []
     if name == "linux-host":
-        paths.append(PACKAGE / "linux-protected.patch")
+        paths.append(PACKAGE / "patches/linux.patch")
     elif name == "opensbi":
-        paths.append(PACKAGE / "opensbi.patch")
+        paths.append(PACKAGE / "patches/opensbi.patch")
     elif name == "qemu":
-        paths.append(PACKAGE / "qemu.patch")
+        paths.append(PACKAGE / "patches/qemu.patch")
     result = {str(path.relative_to(ROOT)): digest(path) for path in paths}
     if name == "opensbi":
         result["ram-policy"] = "2048MiB-v1"
@@ -212,7 +212,14 @@ def verify_source(name):
     if not marker.is_file():
         fail(f"Incomplete source preparation: {source}. Preserve it and inspect before retrying.")
     state = json.loads(marker.read_text())
-    if state["inputs"] != source_inputs(name):
+    legacy_paths = {
+        "pmp-virt-a5/linux-protected.patch": "pmp-virt/patches/linux.patch",
+        "pmp-virt-a5/opensbi.patch": "pmp-virt/patches/opensbi.patch",
+        "pmp-virt-a5/qemu.patch": "pmp-virt/patches/qemu.patch",
+    }
+    inputs = {legacy_paths.get(path, path): checksum
+              for path, checksum in state["inputs"].items()}
+    if inputs != source_inputs(name):
         fail(f"Prepared {name} uses different patches; inspect before rebuilding.")
     revision = run(["git", "-C", source, "rev-parse", "HEAD"], capture=True).strip()
     if revision != SOURCES[name][1]:
@@ -309,7 +316,7 @@ def prepare_source(name):
 
 
 def check():
-    verify_a5()
+    verify_inputs()
     print(f"SDK: {ROOT}\nOutputs: {WORK}\nSource cache: {SDK}")
     errors = []
     for executable in ("git", "make", "gcc", "g++", "python3", "cpio", "gzip", "pkg-config"):
@@ -334,7 +341,7 @@ def configure_linux(name, cross):
     source = verify_source(name)
     output = private_path(WORK / "out" / name)
     output.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(PACKAGE / "linux-protected.config", output / ".config")
+    shutil.copyfile(PACKAGE / "configs/linux.config", output / ".config")
     config = [source / "scripts/config", "--file", output / ".config"]
     for symbol in DISABLED:
         run(config + ["--disable", symbol])
@@ -462,8 +469,9 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         install(WORK / "src/kvmtool/lkvm-static", staging / "usr/bin/lkvm", True)
         install(WORK / "out/pv-user-test", staging / "usr/bin/pv-user-test", True)
-        install(ROOT / "integration/check-host.sh", staging / "usr/bin/check-virt-host", True)
-        install(ROOT / "integration/run-guest.sh", staging / "usr/bin/run-virt-guest", True)
+        install(PACKAGE / "scripts/check-host.sh", staging / "usr/bin/check-virt-host", True)
+        install(PACKAGE / "scripts/run-guest.sh", staging / "usr/bin/run-virt-guest", True)
+        install(PACKAGE / "scripts/run-debian.sh", staging / "usr/bin/run-virt-debian", True)
         install(WORK / "out/linux-guest/arch/riscv/boot/Image", staging / "opt/guest/Image")
         install(images / "guest-rootfs.cpio.gz", staging / "opt/guest/rootfs.cpio.gz")
         append_archive(base, staging, images / "host-rootfs.cpio.gz")
@@ -476,8 +484,9 @@ def artifact_paths():
         "out/opensbi/platform/generic/firmware/fw_jump.bin", "out/opensbi/platform/generic/kconfig/.config",
         "out/qemu/qemu-system-riscv64", "out/pv-user-test", "src/kvmtool/lkvm-static",
         "src/opensbi/include/sbi/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
-    )] + [PACKAGE / "linux-protected.config", ROOT / "integration/virt-kvm.py",
-          ROOT / "integration/run-guest.sh", ROOT / "integration/check-host.sh"]
+    )] + [PACKAGE / "configs/linux.config", PACKAGE / "scripts/virt-kvm.py",
+          PACKAGE / "scripts/run-guest.sh", PACKAGE / "scripts/check-host.sh",
+          PACKAGE / "scripts/run-debian.sh",]
 
 
 def manifest(base=None, cross=None, compiler_version=None):
@@ -494,15 +503,15 @@ def manifest(base=None, cross=None, compiler_version=None):
 
 
 def verify(allow_script_updates=False):
-    verify_a5()
+    verify_inputs()
     state = json.loads((WORK / "manifest.json").read_text())
     expected_paths = {str(path.relative_to(ROOT)) for path in artifact_paths()}
     if state.get("schema") != 1 or state.get("ram_mib") != 2048 or set(state["files"]) != expected_paths:
         fail("Artifact manifest format, RAM size, or file list mismatch")
     if state["sources"] != {name: details[1] for name, details in SOURCES.items()}:
         fail("Artifact source revision mismatch")
-    script_inputs = {str((ROOT / "integration" / name).relative_to(ROOT))
-                     for name in ("virt-kvm.py", "check-host.sh", "run-guest.sh")}
+    script_inputs = {str((PACKAGE / "scripts" / name).relative_to(ROOT))
+                     for name in ("virt-kvm.py", "check-host.sh", "run-guest.sh", "run-debian.sh")}
     for filename, expected in state["files"].items():
         if allow_script_updates and filename in script_inputs:
             continue
@@ -533,7 +542,7 @@ def repack():
 
 
 def build(jobs):
-    verify_a5()
+    verify_inputs()
     cross = cross_prefix()
     base = base_rootfs()
     validate_rootfs(base)
@@ -547,14 +556,14 @@ def build(jobs):
     qemu_source = verify_source("qemu")
     qemu_output = private_path(WORK / "out/qemu")
     qemu_output.mkdir(parents=True, exist_ok=True)
-    run([qemu_source / "configure", "--target-list=riscv64-softmmu", "--disable-docs", "--disable-slirp", "--enable-download"], cwd=qemu_output)
+    run([qemu_source / "configure", "--target-list=riscv64-softmmu", "--disable-docs", "--enable-slirp", "--enable-download"], cwd=qemu_output)
     run(["make", f"-j{jobs}"], cwd=qemu_output)
     dtc = verify_source("dtc")
     run(["make", "-C", dtc, "-B", f"CC={cross}gcc", f"AR={cross}ar",
          "NO_VALGRIND=1", "NO_YAML=1", f"-j{jobs}", "libfdt"])
     lkvm = verify_source("kvmtool")
     run(["make", "-C", lkvm, "ARCH=riscv", f"CROSS_COMPILE={cross}", f"LIBFDT_DIR={dtc / 'libfdt'}", f"-j{jobs}", "lkvm-static"])
-    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", PACKAGE / "user.c", "-o", WORK / "out/pv-user-test"])
+    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", PACKAGE / "tests/user-exec.c", "-o", WORK / "out/pv-user-test"])
     package_rootfs(base)
     manifest(base, cross)
     verify()
@@ -569,6 +578,24 @@ def launch(dry_run):
                "-kernel", WORK / "out/linux-host/arch/riscv/boot/Image",
                "-initrd", WORK / "images/host-rootfs.cpio.gz",
                "-append", "console=ttyS0 earlycon=sbi rdinit=/sbin/init maxcpus=1"]
+    disk_name = os.environ.get("VIRT_DEBIAN_DISK")
+    if disk_name:
+        disk = Path(disk_name).expanduser().resolve()
+        if not disk.is_file():
+            fail(f"Debian disk not found: {disk}")
+        if not os.access(disk, os.R_OK | os.W_OK):
+            fail(f"Debian disk is not readable/writable: {disk}")
+
+        # QEMU 的参数以逗号分隔，路径中的逗号需要转义。
+        disk_path = str(disk).replace(",", ",,")
+        command.extend([
+            "-drive",
+            f"file={disk_path},format=raw,if=none,id=debian",
+            "-device",
+            "virtio-blk-device,drive=debian",
+            "-netdev", "user,id=hostnet",
+            "-device", "virtio-net-device,netdev=hostnet",
+        ])
     print(shlex.join([str(argument) for argument in command]), flush=True)
     if not dry_run:
         os.execv(str(command[0]), [str(argument) for argument in command])
@@ -591,7 +618,7 @@ def main():
     if args.action == "check":
         check()
     elif args.action == "prepare":
-        verify_a5()
+        verify_inputs()
         for name in SOURCES:
             prepare_source(name)
     elif args.action == "build":

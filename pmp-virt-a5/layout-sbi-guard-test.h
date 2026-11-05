@@ -1,6 +1,0 @@
-/* Generated from SBI guard-test Image. */
-#define PV_TEXT_START 0x80202000UL
-#define PV_TEXT_LIMIT 0x811a1000UL
-#define PV_RO_START 0x81600000UL
-#define PV_RO_LIMIT 0x81e00000UL
-#define PV_IMAGE_SHA "ce8824d59eaa83f43e6aeb3827f52128be39838fadf01ada9133018a44e00a93"

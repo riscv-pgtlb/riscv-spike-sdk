@@ -1,0 +1,56 @@
+PMP.Virt + KVM 联合实验文件说明
+# 本文件说明源码目录用途；构建产物保存在仓库的 build/virt-kvm/ 下。
+
+pmp-virt/
+├── 文件说明.txt                     # 本文件：目录结构与各文件的中文说明
+├── README.md                        # 使用指南：方案、依赖、构建与运行步骤、验证边界
+├── SHA256SUMS                       # 补丁、基础配置和测试源码的 SHA-256 校验清单
+├── patches/                         # 组件源码补丁；由联合脚本应用到私有源码副本
+│   ├── qemu.patch                   # 增加 x-pmp-virt 开关及 PMP.Virt 权限判断
+│   ├── opensbi.patch                # 增加 PMP 布局封存接口、SBI 调用限制及保护重设
+│   └── linux.patch                  # host 内核封存协作、启动测试及 /dev/pvtest 实验驱动
+│                                    # 此补丁仅应用于 host，guest 使用未打补丁的源码
+├── configs/
+│   └── linux.config                 # host/guest 共用基础内核配置
+│                                    # 脚本进一步设置 KVM、版本后缀及静态代码限制
+├── scripts/
+│   ├── virt-kvm.py                  # 在服务器执行：检查环境、准备源码、构建与启动
+│   │                                # 生成固件布局、打包 rootfs、校验镜像与固件配对
+│   ├── check-host.sh                # 在 RISC-V host 内执行，安装名为 check-virt-host
+│   │                                # 核对封存、HS 6/6、SBI guard 启动日志及设备
+│   │                                # 实际重新执行同页 U→HS→U 测试
+│   ├── run-guest.sh                 # 在 RISC-V host 内执行，安装名为 run-virt-guest
+│                                    # 先检查 host，再通过 lkvm 启动普通 Linux guest
+├── tests/
+│   └── user-exec.c                  # 编译为 pv-user-test，打包进 host rootfs
+│                                    # 用户页执行返回 42，再请求 HS 执行同一物理页
+│                                    # 期望：U 成功 → HS access fault cause=1 → U 再成功
+│
+└── validation/                      # 历史实验记录，不参与当前构建
+    └── b1/
+        ├── README.md                # B1 验证环境、实验结果、问题及未验证范围
+        ├── b1-console.log           # 当次 host/guest 运行及保护测试的控制台原始日志
+        ├── post-repack-manifest.json # 修正脚本并重新打包后的历史产物哈希和版本清单
+        │                            # 重打包后的 rootfs 当时尚未再次启动验证
+        └── SHA256SUMS               # 校验本目录的控制台日志和历史产物清单
+
+# 运行顺序（在仓库根目录执行）
+python3 pmp-virt/scripts/virt-kvm.py check
+python3 pmp-virt/scripts/virt-kvm.py prepare
+python3 pmp-virt/scripts/virt-kvm.py build -j 4
+python3 pmp-virt/scripts/virt-kvm.py run
+
+# 进入外层 RISC-V host 后执行
+check-virt-host
+run-virt-guest
+
+# guest 内执行 poweroff，返回 host 后再次执行
+check-virt-host
+
+# 验证范围
+# 当前是 PMP.Virt 保护 host + 普通 KVM guest。
+# 尚未实现 G-stage.Virt，也不能据此认定 VS/VU 保护已完成。
+# 历史日志与清单中的旧目录路径保留原样，用于追溯当时的实验。
+
+# Debian 联网：make virt-build 后执行 make run-virt-debian-host
+# 在外层 host 执行 run-virt-debian；guest 内检查 DNS 和 apt-get update。
