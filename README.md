@@ -2,10 +2,15 @@
 
 # RISC-V Spike Simulator SDK
 
+PMP.Virt 子模块构建与回归说明见 [操作指南](docs/pmp-virt/README.md)。
+源码在 `repo/`、配置在 `conf/pmp-virt/`、构建/启动脚本在 `scripts/`、
+测试在 `tests/pmp-virt/`。请使用 `make virt-*` 入口构建受保护的 host；
+旧 Spike/普通 KVM 入口未针对本次受保护 Linux 子模块重新验证。
+
 ## PMP.Virt + KVM 联合实验
 
 受保护 host、普通 Linux guest 的构建与运行入口见
-[PMP.Virt 联合实验指南](pmp-virt/README.md)。
+[PMP.Virt 联合实验指南](docs/pmp-virt/README.md)。
 
 ## RISC-V KVM 实验
 
@@ -31,6 +36,7 @@ This SDK follows the newest Linux Kernel, GNU toolchain and Spike, the functions
 | repo/riscv-gnu-toolchain | GNU Compiler Toolchain |  gcc 15.1.0 ld 2.45  |
 | repo/riscv-(isa-sim,pk)  | Simulator & Bootloader |    master   |
 | repo/opensbi  | Supervisor / Bootloader |    v1.7   |
+| repo/qemu | 团队 PMP.Virt QEMU 子模块 | v10.1.0 + PMP.Virt |
 |         conf        |     config for SDK     |             |
 
 ## Quickstart

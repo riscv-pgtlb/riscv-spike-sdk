@@ -47,7 +47,7 @@ spike_srcdir := $(srcdir)/riscv-isa-sim
 spike_wrkdir := $(wrkdir)/riscv-isa-sim
 spike := $(toolchain_dest)/bin/spike
 
-qemu_srcdir := $(srcdir)/riscv-gnu-toolchain/qemu
+qemu_srcdir := $(srcdir)/qemu
 qemu_wrkdir := $(wrkdir)/qemu
 qemu :=  $(toolchain_dest)/bin/qemu-system-riscv64
 
@@ -367,7 +367,7 @@ run-debian-host: run-kvm-host
 # PMP.Virt + KVM 联合实验入口
 VIRT_PYTHON ?= python3
 VIRT_JOBS ?= 4
-VIRT_SCRIPT := $(topdir)/pmp-virt/scripts/virt-kvm.py
+VIRT_SCRIPT := $(topdir)/scripts/virt-kvm.py
 
 .PHONY: virt-build run-virt-host
 
@@ -383,3 +383,15 @@ run-virt-host:
 .PHONY: run-virt-debian-host
 run-virt-debian-host:
 	VIRT_DEBIAN_DISK="$(DEBIAN_DISK)" $(VIRT_PYTHON) "$(VIRT_SCRIPT)" run
+# PMP.Virt regression: static checks and a fully automatic Buildroot guest cycle.
+.PHONY: virt-check virt-prepare virt-verify virt-test-static virt-test
+virt-check:
+	$(VIRT_PYTHON) "$(VIRT_SCRIPT)" check
+virt-prepare:
+	$(VIRT_PYTHON) -u "$(VIRT_SCRIPT)" prepare
+virt-verify:
+	$(VIRT_PYTHON) "$(VIRT_SCRIPT)" verify
+virt-test-static:
+	$(VIRT_PYTHON) -B -m unittest discover -s tests/pmp-virt -p 'test_*.py' -v
+virt-test:
+	$(VIRT_PYTHON) -u tests/pmp-virt/run-regression.py

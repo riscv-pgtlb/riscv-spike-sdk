@@ -1,6 +1,12 @@
 #!/bin/sh
 set -eu
 
+extra=''
+case "${1:-}" in
+    '') ;;
+    --regression) extra=' virt_regression=1' ;;
+    *) echo 'Usage: run-virt-guest [--regression]' >&2; exit 2 ;;
+esac
 /usr/bin/check-virt-host
 for input in /usr/bin/lkvm /opt/guest/Image /opt/guest/rootfs.cpio.gz; do
     test -r "$input" || { echo "Missing guest input: $input" >&2; exit 1; }
@@ -13,4 +19,4 @@ exec /usr/bin/lkvm run \
     -c 1 \
     --console serial \
     -n mode=none \
-    -p 'console=ttyS0 earlycon=sbi rdinit=/sbin/init maxcpus=1'
+    -p "console=ttyS0 earlycon=sbi rdinit=/sbin/init maxcpus=1$extra"

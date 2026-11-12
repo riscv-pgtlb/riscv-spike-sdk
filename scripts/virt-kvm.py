@@ -13,21 +13,19 @@ import sys
 import tempfile
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "build" / "virt-kvm"
-PACKAGE = ROOT / "pmp-virt"
 SDK = Path(os.environ.get("SOURCE_SDK", str(ROOT))).resolve()
+SOURCE_LOCK = ROOT / "conf/pmp-virt/sources.json"
 RAM_BASE = 0x80000000
 RAM_SIZE = 2048 * 1024 * 1024
 LOAD_ADDRESS = 0x80200000
-SOURCES = {
-    "linux-host": ("LINUX_REPO", "449d48b1b99fdaa076166e200132705ac2bee711", "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git", "v6.17.2", [SDK / "repo/linux", Path.home() / "work/linux-pmp-virt-user-src", Path.home() / "work/linux-pmp-virt-test-src"]),
-    "linux-guest": ("LINUX_REPO", "449d48b1b99fdaa076166e200132705ac2bee711", "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git", "v6.17.2", [WORK / "src/linux-host", SDK / "repo/linux", Path.home() / "work/linux-pmp-virt-user-src"]),
-    "opensbi": ("OPENSBI_REPO", "a32a91069119e7a5aa31e6bc51d5e00860be3d80", "https://github.com/riscv-software-src/opensbi.git", "v1.7", [SDK / "repo/opensbi", Path.home() / "work/opensbi-pmp-virt-user-src", Path.home() / "work/opensbi-pmp-virt-test-src"]),
-    "qemu": ("QEMU_REPO", "f8b2f64e2336a28bf0d50b6ef8a7d8c013e9bcf3", "https://github.com/qemu/qemu.git", "v10.1.0", [SDK / "repo/riscv-gnu-toolchain/qemu", Path.home() / "work/qemu"]),
-    "dtc": ("DTC_REPO", "f99e3af0ecb67a9085478a9b8ddbcc25aa64931d", "https://git.kernel.org/pub/scm/utils/dtc/dtc.git", "f99e3af0ecb67a9085478a9b8ddbcc25aa64931d", [SDK / "repo/dtc"]),
-    "kvmtool": ("KVMTOOL_REPO", "eb915c763e4b95dd4a9d32763fd449459742e053", "https://github.com/kvmtool/kvmtool.git", "eb915c763e4b95dd4a9d32763fd449459742e053", [SDK / "repo/kvmtool"]),
-}
+SOURCES = json.loads(SOURCE_LOCK.read_text())["sources"]
+DIRECT = {"linux-host", "opensbi", "qemu"}
+SCRIPT_INPUTS = ("scripts/virt-kvm.py", "scripts/run-virt-guest.sh",
+                 "scripts/run-virt-debian.sh", "tests/pmp-virt/check-host.sh",
+                 "tests/pmp-virt/check-guest.sh", "tests/pmp-virt/run-host-suite.sh",
+                 "tests/pmp-virt/guest-autorun.sh")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
 
@@ -69,42 +67,45 @@ def write_json(path, value):
 
 
 def verify_inputs():
-    for record in (PACKAGE / "SHA256SUMS").read_text().splitlines():
-        expected, filename = record.split(maxsplit=1)
-        path = (PACKAGE / filename.removeprefix("*")).resolve()
-        if not path.is_relative_to(PACKAGE.resolve()) or digest(path) != expected:
-            fail(f"PMP.Virt input checksum mismatch: {filename}")
+    state = json.loads(SOURCE_LOCK.read_text())
+    if state.get("schema") != 1 or state.get("sources") != SOURCES:
+        fail("Source lock changed during this process; restart after reviewing it")
+    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/user-exec.c", *SCRIPT_INPUTS):
+        if not (ROOT / filename).is_file():
+            fail(f"Missing SDK input: {filename}")
 
 
 def require_checkout():
     top = Path(run(["git", "-C", ROOT, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
-    branch = run(["git", "-C", ROOT, "branch", "--show-current"], capture=True).strip()
-    if top != ROOT or branch != "pmp-virt-kvm-integration":
-        fail("Use the separate pmp-virt-kvm-integration checkout")
-    for revision in ("b47454ec6f067deb660432a2aaf1bc34f294aa65", "746d4f0911901bc4b5d539583841b94b61059821"):
-        run(["git", "-C", ROOT, "merge-base", "--is-ancestor", revision, "HEAD"])
+    if top != ROOT:
+        fail("Run the entry point from an SDK Git checkout")
+
+
+def checked_submodule(name):
+    # Guest reuses Linux history but builds an upstream commit in a private clone.
+    details = SOURCES["linux-host" if name == "linux-guest" else name]
+    relative = details["path"]
+    expected = details["revision"]
+    source = ROOT / relative
+    if not (source / ".git").exists():
+        fail(f"Submodule is not initialized: {relative}. Run prepare or git submodule update --init -- {relative}")
+    if source.is_symlink() or source.resolve() != ROOT / relative:
+        fail(f"Unexpected submodule path: {source}")
+    top = Path(run(["git", "-C", source, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
+    if top != source:
+        fail(f"Not a component Git checkout: {source}")
+    index = run(["git", "-C", ROOT, "ls-files", "--stage", "--", relative], capture=True).split()
+    if len(index) != 4 or index[:3] != ["160000", expected, "0"]:
+        fail(f"SDK gitlink disagrees with source lock: {relative}")
+    if run(["git", "-C", source, "rev-parse", "HEAD"], capture=True).strip() != expected:
+        fail(f"Submodule revision mismatch: {relative}; preserve local work and inspect")
+    if run(["git", "-C", source, "status", "--porcelain", "--untracked-files=all"], capture=True).strip():
+        fail(f"Submodule has local changes: {relative}; commit/review them and update its lock before building")
+    return source
 
 
 def local_repository(name):
-    variable, revision, _, _, candidates = SOURCES[name]
-    if variable in os.environ:
-        candidates = [Path(os.environ[variable])]
-    for candidate in candidates:
-        candidate = candidate.resolve()
-        if not (candidate / ".git").exists():
-            continue
-        try:
-            top = Path(run(["git", "-C", candidate, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
-            if top != candidate:
-                continue
-            subprocess.run(["git", "-C", str(candidate), "cat-file", "-e", revision + "^{commit}"],
-                           check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return candidate
-        except subprocess.CalledProcessError:
-            continue
-    if variable in os.environ:
-        fail(f"{variable} is not a repository containing {revision}")
-    return None
+    return checked_submodule(name)
 
 
 def toolchain_command(arguments, input_text=None):
@@ -192,63 +193,24 @@ def validate_rootfs(base):
     print(f"Base initramfs archive and init tools: PASS ({base})", flush=True)
 
 
-def source_inputs(name):
-    paths = []
-    if name == "linux-host":
-        paths.append(PACKAGE / "patches/linux.patch")
-    elif name == "opensbi":
-        paths.append(PACKAGE / "patches/opensbi.patch")
-    elif name == "qemu":
-        paths.append(PACKAGE / "patches/qemu.patch")
-    result = {str(path.relative_to(ROOT)): digest(path) for path in paths}
-    if name == "opensbi":
-        result["ram-policy"] = "2048MiB-v1"
-    return result
-
-
 def verify_source(name):
+    original = checked_submodule(name)
+    if name in DIRECT:
+        return original
     source = private_path(WORK / "src" / name)
     marker = WORK / "state" / (name + ".json")
     if not marker.is_file():
-        fail(f"Incomplete source preparation: {source}. Preserve it and inspect before retrying.")
+        fail(f"Private build source is not prepared: {source}; run prepare")
     state = json.loads(marker.read_text())
-    legacy_paths = {
-        "pmp-virt-a5/linux-protected.patch": "pmp-virt/patches/linux.patch",
-        "pmp-virt-a5/opensbi.patch": "pmp-virt/patches/opensbi.patch",
-        "pmp-virt-a5/qemu.patch": "pmp-virt/patches/qemu.patch",
-    }
-    inputs = {legacy_paths.get(path, path): checksum
-              for path, checksum in state["inputs"].items()}
-    if inputs != source_inputs(name):
-        fail(f"Prepared {name} uses different patches; inspect before rebuilding.")
-    revision = run(["git", "-C", source, "rev-parse", "HEAD"], capture=True).strip()
-    if revision != SOURCES[name][1]:
-        fail(f"Unexpected source revision: {source}")
-    changed = run(["git", "-C", source, "diff", "--name-only", "HEAD"], capture=True).splitlines()
-    untracked = run(["git", "-C", source, "ls-files", "--others", "--exclude-standard"], capture=True).splitlines()
-    if (set(changed) | set(untracked)) - set(state["files"]):
-        fail(f"Unexpected source changes: {source}")
-    for filename, expected in state["files"].items():
-        if digest(source / filename) != expected:
-            fail(f"Prepared source changed: {source / filename}")
+    expected = SOURCES[name]["revision"]
+    if state != {"schema": 2, "revision": expected}:
+        fail(f"Old or mismatched source state: {source}; preserve it and use a fresh build directory")
+    top = Path(run(["git", "-C", source, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
+    if top != source or run(["git", "-C", source, "rev-parse", "HEAD"], capture=True).strip() != expected:
+        fail(f"Private source revision mismatch: {source}")
+    if run(["git", "-C", source, "status", "--porcelain", "--untracked-files=all"], capture=True).strip():
+        fail(f"Private source has unexpected changes: {source}")
     return source
-
-
-def adapt_firmware(source):
-    path = source / "lib/sbi/sbi_ecall_pvseal.c"
-    content = path.read_text()
-    replacements = [
-        ("(0x80000000UL >> 2) | 0x1ffffffUL", "PV_RAM_NAPOT", 2),
-        ("base < 0x90000000UL && limit > 0x80200000UL", "base < PV_RAM_LIMIT && limit > 0x80200000UL", 1),
-        ("\t/* RAM: 0x80000000..0x8fffffff, naturally aligned 256 MiB. */\n", "", 1),
-    ]
-    for old, new, count in replacements:
-        if content.count(old) != count:
-            fail(f"Unexpected OpenSBI policy source: {old}")
-        content = content.replace(old, new)
-    path.write_text(content)
-    header = source / "include/sbi/pmp_virt_layout.h"
-    header.write_text(header.read_text() + ram_header())
 
 
 def ram_header():
@@ -260,58 +222,30 @@ def ram_header():
             f"#define PV_RAM_NAPOT 0x{napot:x}UL\n")
 
 
-def resume_pristine_fetch(name, source):
-    source = private_path(source)
-    git_directory = source / ".git"
-    if not git_directory.is_dir() or not git_directory.resolve().is_relative_to(source):
-        fail(f"Incomplete {name} preparation is not a private Git repository: {source}")
-    if any(path.name != ".git" for path in source.iterdir()):
-        fail(f"Incomplete {name} preparation contains files; preserve and inspect: {source}")
-    top = Path(run(["git", "-C", source, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
-    if top != source:
-        fail(f"Unexpected Git worktree while resuming {name}: {source}")
-    head = subprocess.run(["git", "-C", str(source), "rev-parse", "--verify", "HEAD"],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if head.returncode == 0:
-        fail(f"Incomplete {name} preparation already has a checkout; preserve and inspect: {source}")
-    fetched = run(["git", "-C", source, "rev-parse", "FETCH_HEAD^{commit}"], capture=True).strip()
-    if fetched != SOURCES[name][1]:
-        fail(f"Cannot resume {name}: downloaded {fetched}, expected {SOURCES[name][1]}")
-    print(f"Resuming verified download without resetting or deleting files: {name}", flush=True)
-
-
 def prepare_source(name):
-    source = private_path(WORK / "src" / name)
-    _, revision, url, ref, _ = SOURCES[name]
-    if source.exists():
-        if (WORK / "state" / (name + ".json")).is_file():
-            return verify_source(name)
-        resume_pristine_fetch(name, source)
-    else:
-        origin = local_repository(name)
-        source.parent.mkdir(parents=True, exist_ok=True)
-        if origin:
-            run(["git", "clone", "--shared", "--no-checkout", "--", origin, source])
-        else:
-            run(["git", "init", source])
-            run(["git", "-C", source, "fetch", "--depth=1", url, ref])
-            fetched = run(["git", "-C", source, "rev-parse", "FETCH_HEAD^{commit}"], capture=True).strip()
-            if fetched != revision:
-                fail(f"Fetched {name} revision mismatch: {fetched}, expected {revision}")
-    run(["git", "-C", source, "checkout", "--detach", revision])
-    files = []
-    for filename in source_inputs(name):
-        if filename == "ram-policy":
-            continue
-        patch = ROOT / filename
-        run(["git", "-C", source, "apply", "--check", patch])
-        run(["git", "-C", source, "apply", patch])
-        files.extend(line[6:] for line in patch.read_text().splitlines() if line.startswith("+++ b/"))
-    if name == "opensbi":
-        adapt_firmware(source)
-    state = {"revision": revision, "inputs": source_inputs(name),
-             "files": {filename: digest(source / filename) for filename in files}}
-    write_json(WORK / "state" / (name + ".json"), state)
+    relative = SOURCES[name]["path"]
+    source = ROOT / relative
+    if not (source / ".git").exists():
+        if source.exists() and any(source.iterdir()):
+            fail(f"Uninitialized submodule contains files; preserve and inspect: {source}")
+        # Follow the SDK gitlink, never --remote or a floating branch.
+        run(["git", "-C", ROOT, "submodule", "update", "--init", "--depth=1", "--", relative])
+    original = checked_submodule(name)
+    if name in DIRECT:
+        return original
+    target = private_path(WORK / "src" / name)
+    if target.exists():
+        return verify_source(name)
+    revision = SOURCES[name]["revision"]
+    contains = subprocess.run(["git", "-C", str(original), "cat-file", "-e", revision + "^{commit}"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if contains.returncode:
+        run(["git", "-C", original, "fetch", "--depth=1", SOURCES[name]["url"], revision])
+        run(["git", "-C", original, "cat-file", "-e", revision + "^{commit}"])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    run(["git", "clone", "--shared", "--no-checkout", "--", original, target])
+    run(["git", "-C", target, "checkout", "--detach", revision])
+    write_json(WORK / "state" / (name + ".json"), {"schema": 2, "revision": revision})
     return verify_source(name)
 
 
@@ -324,7 +258,10 @@ def check():
         if not shutil.which(executable):
             errors.append(f"Missing build tool: {executable}")
     for name in SOURCES:
-        print(f"{name}: {local_repository(name) or 'not cached; prepare will fetch the pinned revision'}")
+        try:
+            print(f"{name}: {checked_submodule(name)} @ {SOURCES[name]['revision']}")
+        except RuntimeError as error:
+            errors.append(str(error))
     for label, lookup in (("CROSS_COMPILE", cross_prefix), ("BASE_ROOTFS", base_rootfs)):
         try:
             print(f"{label}: {lookup()}")
@@ -341,7 +278,7 @@ def configure_linux(name, cross):
     source = verify_source(name)
     output = private_path(WORK / "out" / name)
     output.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(PACKAGE / "configs/linux.config", output / ".config")
+    shutil.copyfile(ROOT / "conf/pmp-virt/linux.config", output / ".config")
     config = [source / "scripts/config", "--file", output / ".config"]
     for symbol in DISABLED:
         run(config + ["--disable", symbol])
@@ -355,7 +292,9 @@ def configure_linux(name, cross):
     for symbol in DISABLED:
         if f"CONFIG_{symbol}=y\n" in content or f"CONFIG_{symbol}=m\n" in content:
             fail(f"Dynamic-code option remains enabled: {symbol}")
-    expected = ["CONFIG_BLK_DEV_INITRD=y", "CONFIG_DEVTMPFS=y", "CONFIG_SERIAL_8250_CONSOLE=y", "CONFIG_VIRTIO_MMIO=y", "CONFIG_STRICT_KERNEL_RWX=y"]
+    expected = ["CONFIG_BLK_DEV_INITRD=y", "CONFIG_DEVTMPFS=y", "CONFIG_SERIAL_8250_CONSOLE=y", "CONFIG_VIRTIO_MMIO=y", "CONFIG_STRICT_KERNEL_RWX=y",
+                "CONFIG_VIRTIO_BLK=y", "CONFIG_VIRTIO_NET=y", "CONFIG_EXT4_FS=y",
+                "CONFIG_NET=y", "CONFIG_INET=y"]
     if name == "linux-host":
         expected.append("CONFIG_KVM=y")
     elif "CONFIG_KVM=y" in content.splitlines() or "CONFIG_KVM=m" in content.splitlines():
@@ -397,16 +336,16 @@ def layout_header(image, system_map):
 def build_firmware(cross, jobs):
     source = verify_source("opensbi")
     host = WORK / "out/linux-host"
-    header_path = source / "include/sbi/pmp_virt_layout.h"
+    header_path = private_path(WORK / "generated/pmp_virt_layout.h")
+    header_path.parent.mkdir(parents=True, exist_ok=True)
     header_path.write_text(layout_header(host / "arch/riscv/boot/Image", host / "System.map"))
-    marker = WORK / "state/opensbi.json"
-    state = json.loads(marker.read_text())
-    state["files"]["include/sbi/pmp_virt_layout.h"] = digest(header_path)
-    write_json(marker, state)
+    if any(character.isspace() or character in '\\"' for character in header_path.as_posix()):
+        fail("OpenSBI generated layout path must not contain whitespace, backslashes or quotes")
     output = private_path(WORK / "out/opensbi")
     run(["make", "-C", source, f"O={output}", "PLATFORM=generic", "PLATFORM_RISCV_XLEN=64",
          "PLATFORM_DEFCONFIG=pmp_virt_seal_defconfig", f"CROSS_COMPILE={cross}",
-         "FW_TEXT_START=0x80000000", "FW_JUMP_ADDR=0x80200000", f"-j{jobs}"])
+         "FW_TEXT_START=0x80000000", "FW_JUMP_ADDR=0x80200000",
+         f"PMP_VIRT_LAYOUT_HEADER={header_path.as_posix()}", f"-j{jobs}"])
     config = (output / "platform/generic/kconfig/.config").read_text().splitlines()
     if "CONFIG_PMP_VIRT_SEAL=y" not in config or "CONFIG_PMP_VIRT_TRANSPORT_TEST=y" in config:
         fail("OpenSBI seal configuration mismatch")
@@ -463,15 +402,20 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("\n::sysinit:/bin/echo VIRT-KVM GUEST BOOTED\n")
+        install(ROOT / "tests/pmp-virt/check-guest.sh", staging / "usr/bin/check-virt-guest", True)
+        install(ROOT / "tests/pmp-virt/guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
+        with (staging / "etc/inittab").open("a") as stream:
+            stream.write("::sysinit:/usr/bin/virt-guest-autorun\n")
         append_archive(base, staging, images / "guest-rootfs.cpio.gz")
     with tempfile.TemporaryDirectory(prefix="pack-", dir=WORK) as temporary:
         staging = Path(temporary)
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         install(WORK / "src/kvmtool/lkvm-static", staging / "usr/bin/lkvm", True)
         install(WORK / "out/pv-user-test", staging / "usr/bin/pv-user-test", True)
-        install(PACKAGE / "scripts/check-host.sh", staging / "usr/bin/check-virt-host", True)
-        install(PACKAGE / "scripts/run-guest.sh", staging / "usr/bin/run-virt-guest", True)
-        install(PACKAGE / "scripts/run-debian.sh", staging / "usr/bin/run-virt-debian", True)
+        install(ROOT / "tests/pmp-virt/check-host.sh", staging / "usr/bin/check-virt-host", True)
+        install(ROOT / "scripts/run-virt-guest.sh", staging / "usr/bin/run-virt-guest", True)
+        install(ROOT / "scripts/run-virt-debian.sh", staging / "usr/bin/run-virt-debian", True)
+        install(ROOT / "tests/pmp-virt/run-host-suite.sh", staging / "usr/bin/test-virt-all", True)
         install(WORK / "out/linux-guest/arch/riscv/boot/Image", staging / "opt/guest/Image")
         install(images / "guest-rootfs.cpio.gz", staging / "opt/guest/rootfs.cpio.gz")
         append_archive(base, staging, images / "host-rootfs.cpio.gz")
@@ -483,16 +427,16 @@ def artifact_paths():
         "out/linux-guest/arch/riscv/boot/Image", "out/linux-guest/.config",
         "out/opensbi/platform/generic/firmware/fw_jump.bin", "out/opensbi/platform/generic/kconfig/.config",
         "out/qemu/qemu-system-riscv64", "out/pv-user-test", "src/kvmtool/lkvm-static",
-        "src/opensbi/include/sbi/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
-    )] + [PACKAGE / "configs/linux.config", PACKAGE / "scripts/virt-kvm.py",
-          PACKAGE / "scripts/run-guest.sh", PACKAGE / "scripts/check-host.sh",
-          PACKAGE / "scripts/run-debian.sh",]
+        "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
+    )] + [ROOT / filename for filename in (
+        "conf/pmp-virt/linux.config", "conf/pmp-virt/sources.json", "conf/rootfs-overlay/etc/inittab",
+        "tests/pmp-virt/user-exec.c", *SCRIPT_INPUTS)]
 
 
 def manifest(base=None, cross=None, compiler_version=None):
-    files = {str(path.relative_to(ROOT)): digest(path) for path in artifact_paths()}
-    state = {"schema": 1, "ram_mib": RAM_SIZE // (1024 * 1024),
-             "sources": {name: details[1] for name, details in SOURCES.items()}, "files": files}
+    files = {path.relative_to(ROOT).as_posix(): digest(path) for path in artifact_paths()}
+    state = {"schema": 2, "ram_mib": RAM_SIZE // (1024 * 1024),
+             "sources": {name: details["revision"] for name, details in SOURCES.items()}, "files": files}
     if base:
         state["base_rootfs"] = {"path": str(base), "sha256": digest(base)}
     if cross:
@@ -505,13 +449,12 @@ def manifest(base=None, cross=None, compiler_version=None):
 def verify(allow_script_updates=False):
     verify_inputs()
     state = json.loads((WORK / "manifest.json").read_text())
-    expected_paths = {str(path.relative_to(ROOT)) for path in artifact_paths()}
-    if state.get("schema") != 1 or state.get("ram_mib") != 2048 or set(state["files"]) != expected_paths:
+    expected_paths = {path.relative_to(ROOT).as_posix() for path in artifact_paths()}
+    if state.get("schema") != 2 or state.get("ram_mib") != 2048 or set(state["files"]) != expected_paths:
         fail("Artifact manifest format, RAM size, or file list mismatch")
-    if state["sources"] != {name: details[1] for name, details in SOURCES.items()}:
+    if state["sources"] != {name: details["revision"] for name, details in SOURCES.items()}:
         fail("Artifact source revision mismatch")
-    script_inputs = {str((PACKAGE / "scripts" / name).relative_to(ROOT))
-                     for name in ("virt-kvm.py", "check-host.sh", "run-guest.sh", "run-debian.sh")}
+    script_inputs = set(SCRIPT_INPUTS)
     for filename, expected in state["files"].items():
         if allow_script_updates and filename in script_inputs:
             continue
@@ -519,7 +462,7 @@ def verify(allow_script_updates=False):
             fail(f"Artifact checksum mismatch: {filename}. Rebuild before booting.")
     host = WORK / "out/linux-host"
     expected_header = layout_header(host / "arch/riscv/boot/Image", host / "System.map")
-    if (WORK / "src/opensbi/include/sbi/pmp_virt_layout.h").read_text() != expected_header:
+    if (WORK / "generated/pmp_virt_layout.h").read_text() != expected_header:
         fail("Firmware layout does not match the host Image")
     firmware = WORK / "out/opensbi/platform/generic/firmware/fw_jump.bin"
     if digest(host / "arch/riscv/boot/Image").encode() not in firmware.read_bytes():
@@ -563,10 +506,12 @@ def build(jobs):
          "NO_VALGRIND=1", "NO_YAML=1", f"-j{jobs}", "libfdt"])
     lkvm = verify_source("kvmtool")
     run(["make", "-C", lkvm, "ARCH=riscv", f"CROSS_COMPILE={cross}", f"LIBFDT_DIR={dtc / 'libfdt'}", f"-j{jobs}", "lkvm-static"])
-    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", PACKAGE / "tests/user-exec.c", "-o", WORK / "out/pv-user-test"])
+    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", ROOT / "tests/pmp-virt/user-exec.c", "-o", WORK / "out/pv-user-test"])
     package_rootfs(base)
     manifest(base, cross)
     verify()
+    for name in SOURCES:
+        verify_source(name)
     print("Build complete. Runtime validation has NOT been performed.")
 
 
@@ -632,6 +577,7 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.dont_write_bytecode = True
     try:
         main()
     except (RuntimeError, OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
