@@ -5,6 +5,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [boot-baseline.md](boot-baseline.md) | A1 交付时的启动结果、组件版本和范围 |
+| [spike-sdk-legacy.md](spike-sdk-legacy.md) | 从根 README 迁入的原英文 Spike SDK、工具链及 JTAG 说明；早于 A1，当前分支未重新验证 |
 
 原 `docs/baseline-a1-inputs.sha256` 在本次整理前已从工作区删除，未恢复，不将其列为当前存在的文件。
 需要查询原记录时，在项目根目录执行：
