@@ -9,7 +9,7 @@ work/
 
 
 # toolchian
-build/
+/build/
 toolchain/
 rootfs/
 

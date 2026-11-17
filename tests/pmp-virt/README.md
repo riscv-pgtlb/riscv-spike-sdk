@@ -1,19 +1,14 @@
-# 回归测试入口
+# PMP.Virt 测试
 
-在 Ubuntu 服务器的 SDK 根目录运行：
+统一入口：`make pmpvirt-test`，默认双 Debian；`make pmpvirt-test PMPVIRT_SYSTEM=buildroot` 使用原 Buildroot 回归。
+逐项显示结果并保存证据，使用方法见 [统一测试说明](../../docs/03-pmp-virt-kvm/test-suite.md)。
 
-```bash
-make virt-test-static   # 不启动 QEMU：脚本逻辑、布局、校验与版本检查
-make virt-test          # 先完成 virt-build：host -> guest -> host 自动运行回归
-```
+make virt-test-static 执行 unit/；
+make virt-test 执行 Buildroot 完整回归
+Debian 外层执行 test-virt-debian-all /dev/vdb
 
-`check-host.sh` 检查启动日志和设备，并运行 `user-exec.c` 编译出的同页探针。
-`check-guest.sh` 检查普通 guest 内核、内存与时间推进。
-`guest-autorun.sh` 只在专用回归启动参数下执行 guest 检查并关机。
-`run-host-suite.sh` 在外层 host 执行全部运行阶段。
-`run-regression.py` 在 Ubuntu 服务器驱动 QEMU 控制台、验证结果顺序并归档。
-
-完整步骤、Debian 和验证边界见 [指南](../../docs/pmp-virt/README.md)。
-内核中依赖异常处理的 HS 探针仍在 Linux 子模块 `arch/riscv/kernel/pv_access.c`，
-测试目录集中用户程序、驱动入口和结果检查，不重复复制内核内部代码。
-未封存对照程序和早期证据保留在历史 `b47454e`，尚未接入本次自动回归；不得宣称已覆盖。
+| 文件或目录 | 用途 |
+| --- | --- |
+| [unit/](unit) | 不启动真实 Debian 的自动测试。 |
+| [runtime/](runtime) | 安装进虚拟机并执行的保护和 guest 检查，以及同页权限探针。 |
+| [regression/](regression) | 按系统类型串联 host → guest → host 的完整运行回归。 |

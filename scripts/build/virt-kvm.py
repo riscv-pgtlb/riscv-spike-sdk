@@ -13,7 +13,7 @@ import sys
 import tempfile
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 WORK = ROOT / "build" / "virt-kvm"
 SDK = Path(os.environ.get("SOURCE_SDK", str(ROOT))).resolve()
 SOURCE_LOCK = ROOT / "conf/pmp-virt/sources.json"
@@ -22,10 +22,10 @@ RAM_SIZE = 2048 * 1024 * 1024
 LOAD_ADDRESS = 0x80200000
 SOURCES = json.loads(SOURCE_LOCK.read_text())["sources"]
 DIRECT = {"linux-host", "opensbi", "qemu"}
-SCRIPT_INPUTS = ("scripts/virt-kvm.py", "scripts/run-virt-guest.sh",
-                 "scripts/run-virt-debian.sh", "tests/pmp-virt/check-host.sh",
-                 "tests/pmp-virt/check-guest.sh", "tests/pmp-virt/run-host-suite.sh",
-                 "tests/pmp-virt/guest-autorun.sh")
+SCRIPT_INPUTS = ("scripts/build/virt-kvm.py", "scripts/buildroot/run-virt-guest.sh",
+                 "scripts/buildroot/run-virt-debian.sh", "tests/pmp-virt/runtime/check-host.sh",
+                 "tests/pmp-virt/runtime/check-guest.sh", "tests/pmp-virt/regression/buildroot/run-host-suite.sh",
+                 "tests/pmp-virt/regression/buildroot/guest-autorun.sh")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
 
@@ -70,7 +70,7 @@ def verify_inputs():
     state = json.loads(SOURCE_LOCK.read_text())
     if state.get("schema") != 1 or state.get("sources") != SOURCES:
         fail("Source lock changed during this process; restart after reviewing it")
-    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/user-exec.c", *SCRIPT_INPUTS):
+    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/runtime/user-exec.c", *SCRIPT_INPUTS):
         if not (ROOT / filename).is_file():
             fail(f"Missing SDK input: {filename}")
 
@@ -244,6 +244,19 @@ def prepare_source(name):
         run(["git", "-C", original, "cat-file", "-e", revision + "^{commit}"])
     target.parent.mkdir(parents=True, exist_ok=True)
     run(["git", "clone", "--shared", "--no-checkout", "--", original, target])
+
+    # 浅仓库克隆后可能缺少未被分支引用的固定提交。
+    contains = subprocess.run(
+        ["git", "-C", str(target), "cat-file", "-e", revision + "^{commit}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if contains.returncode:
+        run([
+            "git", "-C", target, "fetch", "--depth=1",
+            SOURCES[name]["url"], revision,
+        ])
+
     run(["git", "-C", target, "checkout", "--detach", revision])
     write_json(WORK / "state" / (name + ".json"), {"schema": 2, "revision": revision})
     return verify_source(name)
@@ -402,8 +415,8 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("\n::sysinit:/bin/echo VIRT-KVM GUEST BOOTED\n")
-        install(ROOT / "tests/pmp-virt/check-guest.sh", staging / "usr/bin/check-virt-guest", True)
-        install(ROOT / "tests/pmp-virt/guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
+        install(ROOT / "tests/pmp-virt/runtime/check-guest.sh", staging / "usr/bin/check-virt-guest", True)
+        install(ROOT / "tests/pmp-virt/regression/buildroot/guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("::sysinit:/usr/bin/virt-guest-autorun\n")
         append_archive(base, staging, images / "guest-rootfs.cpio.gz")
@@ -412,10 +425,10 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         install(WORK / "src/kvmtool/lkvm-static", staging / "usr/bin/lkvm", True)
         install(WORK / "out/pv-user-test", staging / "usr/bin/pv-user-test", True)
-        install(ROOT / "tests/pmp-virt/check-host.sh", staging / "usr/bin/check-virt-host", True)
-        install(ROOT / "scripts/run-virt-guest.sh", staging / "usr/bin/run-virt-guest", True)
-        install(ROOT / "scripts/run-virt-debian.sh", staging / "usr/bin/run-virt-debian", True)
-        install(ROOT / "tests/pmp-virt/run-host-suite.sh", staging / "usr/bin/test-virt-all", True)
+        install(ROOT / "tests/pmp-virt/runtime/check-host.sh", staging / "usr/bin/check-virt-host", True)
+        install(ROOT / "scripts/buildroot/run-virt-guest.sh", staging / "usr/bin/run-virt-guest", True)
+        install(ROOT / "scripts/buildroot/run-virt-debian.sh", staging / "usr/bin/run-virt-debian", True)
+        install(ROOT / "tests/pmp-virt/regression/buildroot/run-host-suite.sh", staging / "usr/bin/test-virt-all", True)
         install(WORK / "out/linux-guest/arch/riscv/boot/Image", staging / "opt/guest/Image")
         install(images / "guest-rootfs.cpio.gz", staging / "opt/guest/rootfs.cpio.gz")
         append_archive(base, staging, images / "host-rootfs.cpio.gz")
@@ -430,7 +443,7 @@ def artifact_paths():
         "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
     )] + [ROOT / filename for filename in (
         "conf/pmp-virt/linux.config", "conf/pmp-virt/sources.json", "conf/rootfs-overlay/etc/inittab",
-        "tests/pmp-virt/user-exec.c", *SCRIPT_INPUTS)]
+        "tests/pmp-virt/runtime/user-exec.c", *SCRIPT_INPUTS)]
 
 
 def manifest(base=None, cross=None, compiler_version=None):
@@ -506,7 +519,7 @@ def build(jobs):
          "NO_VALGRIND=1", "NO_YAML=1", f"-j{jobs}", "libfdt"])
     lkvm = verify_source("kvmtool")
     run(["make", "-C", lkvm, "ARCH=riscv", f"CROSS_COMPILE={cross}", f"LIBFDT_DIR={dtc / 'libfdt'}", f"-j{jobs}", "lkvm-static"])
-    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", ROOT / "tests/pmp-virt/user-exec.c", "-o", WORK / "out/pv-user-test"])
+    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", ROOT / "tests/pmp-virt/runtime/user-exec.c", "-o", WORK / "out/pv-user-test"])
     package_rootfs(base)
     manifest(base, cross)
     verify()
@@ -523,6 +536,33 @@ def launch(dry_run):
                "-kernel", WORK / "out/linux-host/arch/riscv/boot/Image",
                "-initrd", WORK / "images/host-rootfs.cpio.gz",
                "-append", "console=ttyS0 earlycon=sbi rdinit=/sbin/init maxcpus=1"]
+    host_disk_name = os.environ.get("VIRT_HOST_DISK")
+    if host_disk_name:
+        host_disk = Path(host_disk_name).expanduser().resolve()
+        if not host_disk.is_file():
+            fail(f"Debian host disk not found: {host_disk}")
+        if not os.access(host_disk, os.R_OK | os.W_OK):
+            fail(f"Debian host disk is not readable/writable: {host_disk}")
+        if os.environ.get("VIRT_DEBIAN_DISK"):
+            fail("Separate host and guest disk support is not configured")
+
+        # Debian 从磁盘启动，移除 Buildroot host initramfs。
+        initrd_index = command.index("-initrd")
+        del command[initrd_index:initrd_index + 2]
+        append_index = command.index("-append")
+        command[append_index + 1] = (
+            "console=ttyS0 earlycon=sbi "
+            "root=/dev/vda1 rw rootwait maxcpus=1"
+        )
+
+        host_disk_path = str(host_disk).replace(",", ",,")
+        command.extend([
+            "-drive",
+            f"file={host_disk_path},format=raw,if=none,id=hostroot",
+            "-device", "virtio-blk-device,drive=hostroot",
+            "-netdev", "user,id=hostnet",
+            "-device", "virtio-net-device,netdev=hostnet",
+        ])
     disk_name = os.environ.get("VIRT_DEBIAN_DISK")
     if disk_name:
         disk = Path(disk_name).expanduser().resolve()

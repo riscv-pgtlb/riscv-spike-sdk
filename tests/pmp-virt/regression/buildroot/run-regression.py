@@ -14,9 +14,9 @@ import sys
 import threading
 import time
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 sys.dont_write_bytecode = True
-spec = importlib.util.spec_from_file_location("virt_build", ROOT / "scripts/virt-kvm.py")
+spec = importlib.util.spec_from_file_location("virt_build", ROOT / "scripts/build/virt-kvm.py")
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
 STEPS = (
@@ -59,7 +59,7 @@ def main():
     folder = build.WORK / "logs" / ("regression-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f"))
     folder.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(build.WORK / "manifest.json", folder / "manifest.json")
-    process = subprocess.Popen([sys.executable, "-u", str(ROOT / "scripts/virt-kvm.py"), "run"],
+    process = subprocess.Popen([sys.executable, "-u", str(ROOT / "scripts/build/virt-kvm.py"), "run"],
                                cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.STDOUT, bufsize=0)
     chunks = queue.Queue()

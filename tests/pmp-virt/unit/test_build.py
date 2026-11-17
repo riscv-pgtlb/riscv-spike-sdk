@@ -9,11 +9,11 @@ import unittest
 from unittest.mock import patch
 
 sys.dont_write_bytecode = True
-ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("build_sdk_tests", ROOT / "scripts/virt-kvm.py")
+ROOT = Path(__file__).resolve().parents[3]
+spec = importlib.util.spec_from_file_location("build_sdk_tests", ROOT / "scripts/build/virt-kvm.py")
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
-spec = importlib.util.spec_from_file_location("regression_tests", ROOT / "tests/pmp-virt/run-regression.py")
+spec = importlib.util.spec_from_file_location("regression_tests", ROOT / "tests/pmp-virt/regression/buildroot/run-regression.py")
 regression = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(regression)
 
@@ -138,7 +138,7 @@ class BuildChecks(unittest.TestCase):
         base = self.root / "base.cpio.gz"
         base.write_bytes(b"base")
         build.manifest(base, compiler_version="test GCC")
-        (self.root / "tests/pmp-virt/check-host.sh").write_bytes(b"script update")
+        (self.root / "tests/pmp-virt/runtime/check-host.sh").write_bytes(b"script update")
         image = build.WORK / "out/linux-host/arch/riscv/boot/Image"
         before = build.digest(image)
         with patch.object(build, "validate_rootfs"), patch.object(build, "package_rootfs"):
@@ -196,7 +196,7 @@ class BuildChecks(unittest.TestCase):
 
     def test_source_lock_separates_host_and_guest(self):
         self.assertNotEqual(build.SOURCES["linux-host"]["revision"], build.SOURCES["linux-guest"]["revision"])
-        source = (ROOT / "scripts/virt-kvm.py").read_text()
+        source = (ROOT / "scripts/build/virt-kvm.py").read_text()
         self.assertNotIn('"apply"', source)
         self.assertNotIn("adapt_firmware", source)
         self.assertNotIn("pmp-virt/patches", source)

@@ -1,8 +1,14 @@
-![logo](./conf/logo.png)
+![logo](conf/logo.png)
 
 # RISC-V Spike Simulator SDK
 
-PMP.Virt 子模块构建与回归说明见 [操作指南](docs/pmp-virt/README.md)。
+脚本按功能组织，见 [scripts 目录说明](scripts/README.md)；测试分类见 [tests 目录说明](tests/README.md)。
+
+项目阶段、操作指南和验证记录见 [文档导航](docs/README.md)，当前双 Debian 从 [第四阶段](docs/04-dual-debian/README.md) 开始。
+
+统一已有测试使用 `make pmpvirt-test`，参数及结果说明见 [统一测试入口](docs/03-pmp-virt-kvm/test-suite.md)。
+
+PMP.Virt 子模块构建与回归说明见 [操作指南](docs/03-pmp-virt-kvm/README.md)。
 源码在 `repo/`、配置在 `conf/pmp-virt/`、构建/启动脚本在 `scripts/`、
 测试在 `tests/pmp-virt/`。请使用 `make virt-*` 入口构建受保护的 host；
 旧 Spike/普通 KVM 入口未针对本次受保护 Linux 子模块重新验证。
@@ -10,13 +16,13 @@ PMP.Virt 子模块构建与回归说明见 [操作指南](docs/pmp-virt/README.m
 ## PMP.Virt + KVM 联合实验
 
 受保护 host、普通 Linux guest 的构建与运行入口见
-[PMP.Virt 联合实验指南](docs/pmp-virt/README.md)。
+[PMP.Virt 联合实验指南](docs/03-pmp-virt-kvm/README.md)。
 
 ## RISC-V KVM 实验
 
 当前分支的 KVM 构建、Buildroot/Debian guest 启动及验证说明见
-[KVM 操作指南](docs/kvm-guide.md)、[Debian 镜像准备](docs/debian-guest.md)
-和 [QEMU 网络构建](docs/qemu-network.md)。后续原 SDK 的 Spike 使用说明
+[KVM 操作指南](docs/02-ordinary-kvm/kvm-guide.md)、[Debian 镜像准备](docs/02-ordinary-kvm/debian-guest.md)
+和 [QEMU 网络构建](docs/02-ordinary-kvm/qemu-network.md)。后续原 SDK 的 Spike 使用说明
 保留作参考；本分支已更换默认内核配置，原 Spike 流程尚未重新验证。
 
 In the recent version of the riscv-tools and freedom-u-sdk, both of them removed the support of the spike simulator, and tutorials about running Linux on spike is using static compiled busybox, which is not suitable for real test environments. Spike is the simplest simulator of RISC-V, it has a very clear description of the instructions, you can apply your ideas and check it for a quick try. The **R**ISC-V **S**pike **S**imulator SDK wants to help people to test design with 64-bit Linux environment on Spike easily, the basic framework is based on Freedom U SDK version 1.0.
@@ -52,7 +58,7 @@ git clone https://github.com/riscv-zju/riscv-rss-sdk.git
 
 # For people who only want to have a try
 # sh quickstart.sh
-sh scripts/quickstart.sh
+sh scripts/setup/quickstart.sh
 # For people who want to develop the whole system
 git submodule update --init --recursive --progress
 

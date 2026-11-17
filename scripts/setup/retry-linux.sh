@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-cd "$HOME/riscv-spike-sdk" || exit 1
+project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "$project_dir" || exit 1
 trap 'echo "已停止重试"; exit 130' INT TERM
 
 attempt=1

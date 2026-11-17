@@ -71,7 +71,10 @@ endif
 
 $(toolchain_dest)/bin/$(target_linux)-gcc:
 	mkdir -p $(toolchain_wrkdir)
-	$(MAKE) -C $(linux_srcdir) O=$(toolchain_wrkdir) ARCH=riscv INSTALL_HDR_PATH=$(abspath $(toolchain_srcdir)/linux-headers) headers_install
+	$(MAKE) -C $(linux_srcdir) \
+		O=$(toolchain_wrkdir) ARCH=riscv \
+		INSTALL_HDR_PATH=$(abspath $(toolchain_srcdir)/linux-headers) \
+		headers_install
 	cd "$(toolchain_wrkdir)" && "$(toolchain_srcdir)/configure" \
 		--prefix=$(toolchain_dest) \
 		--with-arch=$(ISA) \
@@ -99,7 +102,9 @@ $(buildroot_initramfs_wrkdir)/.config: $(buildroot_initramfs_config)
 	$(MAKE) -C "$(buildroot_srcdir)" \
 		O="$(buildroot_initramfs_wrkdir)" olddefconfig
 
-$(buildroot_initramfs_tar): $(buildroot_srcdir) $(buildroot_initramfs_wrkdir)/.config $(RISCV)/bin/$(target_linux)-gcc $(buildroot_initramfs_config)
+$(buildroot_initramfs_tar): $(buildroot_srcdir) \
+		$(buildroot_initramfs_wrkdir)/.config \
+		$(RISCV)/bin/$(target_linux)-gcc $(buildroot_initramfs_config)
 	$(MAKE) -C $< RISCV=$(RISCV) PATH="$(PATH)" O=$(buildroot_initramfs_wrkdir)
 
 .PHONY: buildroot_initramfs-menuconfig
@@ -179,7 +184,10 @@ $(pk): $(pk_srcdir) $(RISCV)/bin/$(target_newlib)-gcc
 $(fw_jump): $(opensbi_srcdir) $(linux_image) $(RISCV)/bin/$(target_linux)-gcc
 	rm -rf $(opensbi_wrkdir)
 	mkdir -p $(opensbi_wrkdir)
-	$(MAKE) -C $(opensbi_srcdir) FW_TEXT_START=0x80000000 FW_PAYLOAD_PATH=$(linux_image) PLATFORM=generic O=$(opensbi_wrkdir) CROSS_COMPILE=riscv64-unknown-linux-gnu-
+	$(MAKE) -C $(opensbi_srcdir) \
+		FW_TEXT_START=0x80000000 FW_PAYLOAD_PATH=$(linux_image) \
+		PLATFORM=generic O=$(opensbi_wrkdir) \
+		CROSS_COMPILE=riscv64-unknown-linux-gnu-
 
 $(spike): $(spike_srcdir) 
 	rm -rf $(spike_wrkdir)
@@ -323,7 +331,7 @@ kvmtool-build: libfdt-build
 # 构建内核、模块和 lkvm，然后生成外层 rootfs 候选镜像。
 .PHONY: rootfs-kvm
 rootfs-kvm: rootfs-base linux-build kvmtool-build
-	bash "$(topdir)/scripts/pack-kvm-rootfs.sh"
+	bash "$(topdir)/scripts/legacy/pack-kvm-rootfs.sh"
 
 # 启动镜像所在目录，可在命令行覆盖：
 # make run-kvm-host KVM_IMAGE_DIR=/path/to/images
@@ -367,7 +375,7 @@ run-debian-host: run-kvm-host
 # PMP.Virt + KVM 联合实验入口
 VIRT_PYTHON ?= python3
 VIRT_JOBS ?= 4
-VIRT_SCRIPT := $(topdir)/scripts/virt-kvm.py
+VIRT_SCRIPT := $(topdir)/scripts/build/virt-kvm.py
 
 .PHONY: virt-build run-virt-host
 
@@ -392,6 +400,54 @@ virt-prepare:
 virt-verify:
 	$(VIRT_PYTHON) "$(VIRT_SCRIPT)" verify
 virt-test-static:
-	$(VIRT_PYTHON) -B -m unittest discover -s tests/pmp-virt -p 'test_*.py' -v
+	$(VIRT_PYTHON) -B -m unittest discover -s tests/pmp-virt/unit -p 'test_*.py' -v
 virt-test:
-	$(VIRT_PYTHON) -u tests/pmp-virt/run-regression.py
+	$(VIRT_PYTHON) -u tests/pmp-virt/regression/buildroot/run-regression.py
+
+# 统一现有测试；默认双 Debian，PMPVIRT_SYSTEM=buildroot 可选择原回归。
+PMPVIRT_SYSTEM ?= debian
+PMPVIRT_TIMEOUT ?= 600
+PMPVIRT_PASSWORD_FILE ?=
+.PHONY: pmpvirt-test
+pmpvirt-test:
+	PMPVIRT_PASSWORD_FILE="$(PMPVIRT_PASSWORD_FILE)" \
+		$(VIRT_PYTHON) -B -u \
+		"$(topdir)/tests/pmp-virt/regression/run-suite.py" \
+		--system "$(PMPVIRT_SYSTEM)" \
+		--timeout "$(PMPVIRT_TIMEOUT)" \
+		--host-disk "$(DEBIAN_HOST_DISK)" \
+		--guest-disk "$(DEBIAN_GUEST_DISK)"
+
+
+# ------------------- 双层 debian ----------
+# 生成和传输安装包
+.PHONY: debian-tools serve-debian-tools
+
+debian-tools:
+	bash "$(topdir)/scripts/debian/install/pack-tools.sh"
+
+serve-debian-tools: debian-tools
+	python3 -m http.server 8000 --bind 127.0.0.1 --directory "$(topdir)/build/debian-host-transfer"
+
+# 从基础镜像创建并初始化独立的双 Debian 磁盘
+.PHONY: debian-prepare
+DEBIAN_RECREATE ?= 0
+debian-prepare:
+	DEBIAN_RECREATE="$(DEBIAN_RECREATE)" bash "$(topdir)/scripts/debian/prepare/prepare-dual-debian.sh"
+
+DEBIAN_HOST_DISK ?= $(topdir)/images/debian/debian-host.raw
+DEBIAN_GUEST_DISK ?= $(topdir)/images/debian/debian-guest.raw
+
+# 关闭双 Debian 后更新两块磁盘中的工具。
+.PHONY: debian-update
+debian-update:
+	$(VIRT_PYTHON) -B \
+		"$(topdir)/scripts/debian/update/update-dual-debian.py" \
+		--host-disk "$(DEBIAN_HOST_DISK)" \
+		--guest-disk "$(DEBIAN_GUEST_DISK)"
+
+.PHONY: run-virt-dual-debian
+run-virt-dual-debian:
+	DEBIAN_HOST_DISK="$(DEBIAN_HOST_DISK)" \
+		DEBIAN_GUEST_DISK="$(DEBIAN_GUEST_DISK)" \
+		bash "$(topdir)/scripts/debian/run/run-dual-debian.sh"

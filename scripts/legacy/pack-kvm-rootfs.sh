@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$PROJECT_DIR"
 
 BASE_ROOTFS="images/base/rootfs.cpio.gz"
@@ -32,8 +32,8 @@ mkdir -p "$STAGE/root/usr/bin" \
 
 cp "$LKVM" "$STAGE/root/usr/bin/lkvm"
 # 将 guest 启动入口安装到外层系统。
-install -m 0755 scripts/run-guest.sh "$STAGE/root/usr/bin/run-guest"
-install -m 0755 scripts/run-debian.sh "$STAGE/root/usr/bin/run-debian"
+install -m 0755 scripts/legacy/run-guest.sh "$STAGE/root/usr/bin/run-guest"
+install -m 0755 scripts/legacy/run-debian.sh "$STAGE/root/usr/bin/run-debian"
 cp -a "$MODULES/$RELEASE" "$STAGE/root/lib/modules/"
 cp "$KERNEL" "$STAGE/root/opt/guest/Image"
 cp "$BASE_ROOTFS" "$STAGE/root/opt/guest/rootfs.cpio.gz"

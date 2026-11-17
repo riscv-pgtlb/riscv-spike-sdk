@@ -117,7 +117,7 @@ images/kvm/rootfs-kvm-new.cpio.gz 新外层文件系统
 
 ### 10. 增加自动打包脚本
 
-添加 `scripts/pack-kvm-rootfs.sh`，并将 `run-guest` 和 `run-debian` 安装到外层 `/usr/bin/`。
+添加 `scripts/legacy/pack-kvm-rootfs.sh`，并将 `run-guest` 和 `run-debian` 安装到外层 `/usr/bin/`。
 
 ### 11. 修改 Makefile
 
@@ -148,7 +148,7 @@ QEMU 把 raw 文件作为外层 `/dev/vda`；lkvm 通过 `-d /dev/vda` 将整盘
 
 ### 4. 增加 Debian 启动脚本
 
-新增 `scripts/run-debian.sh`：在外层启动 Debian；打包脚本会把它安装为 `/usr/bin/run-debian`。
+新增 `scripts/legacy/run-debian.sh`：在外层启动 Debian；打包脚本会把它安装为 `/usr/bin/run-debian`。
 
 ### 5. 配置两层网络
 

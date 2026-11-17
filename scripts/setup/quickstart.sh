@@ -30,7 +30,7 @@ cd $root
 }
 
 # root="$(dirname "$(readlink -f "$0")")"
-root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+root="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 NJOB=4
 
 # root_repo_list=${ROOT_LIST:-"buildroot riscv-gnu-toolchain riscv-pk linux riscv-isa-sim"}

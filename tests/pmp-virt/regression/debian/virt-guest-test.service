@@ -1,0 +1,17 @@
+[Unit]
+Description=Debian guest regression
+ConditionKernelCommandLine=virt_regression=1
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/check-virt-tools --role guest
+ExecStart=/usr/local/bin/check-virt-guest
+ExecStart=/usr/bin/echo VIRT-REGRESSION GUEST SHUTDOWN
+# Also power down on a failed check, so the host can reject the missing PASS
+# instead of waiting forever. The success-only SHUTDOWN marker stays above.
+ExecStopPost=/usr/bin/systemctl --no-block poweroff
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
