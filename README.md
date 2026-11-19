@@ -130,7 +130,7 @@ make pmpvirt-test
 | `make virt-test-static` | 服务器 | 单独运行逻辑测试，不启动真实 Debian |
 | `make pmpvirt-test PMPVIRT_SYSTEM=buildroot` | 服务器 | 统一入口使用原有 Buildroot 回归 |
 | `run-debian-guest` | 外层 Debian | 正常启动内层，不自动测试关机 |
-| `check-virt-host` | 外层 Debian | 核对启动保护结果并执行同页 U → HS → U |
+| `check-virt-host` | 外层 Debian | 核对启动保护结果并执行同页 U → HS → U、syscall 接口及保护测试 |
 | `test-virt-debian-all /dev/vdb` | 外层 Debian | 手动运行完整回归，默认使用本地配套工具版本 |
 | `check-virt-tools` | 任一层 Debian | 检查本地安装文件和版本一致性 |
 
@@ -144,7 +144,10 @@ make pmpvirt-test   DEBIAN_HOST_DISK=/path/to/debian-host.raw   DEBIAN_GUEST_DIS
 
 ## 已验证范围
 
-**2026-11-17 最近归档的一轮：84 项自动测试通过，双 Debian 的 16 个汇总测试点全部通过。**
+**2026-11-19 syscall 迁移验证：86 项自动测试通过，Buildroot 与正常双 Debian 回归各 16/16 通过，Debian 快照检查通过且磁盘内容不变。**
+本轮详情见 [syscall 迁移验证记录](docs/04-dual-debian/syscall-validation.md)。
+
+2026-11-17 历史归档：84 项自动测试通过，双 Debian 的 16 个汇总测试点全部通过。
 已完成自动更新后的文件检查、服务器版本配对、保护回归和正常关机。
 对应证据与结果见 [验证记录](docs/04-dual-debian/validation.md) 和 [实验报告](docs/04-dual-debian/experiment-report.md)。
 
@@ -153,9 +156,12 @@ make pmpvirt-test   DEBIAN_HOST_DISK=/path/to/debian-host.raw   DEBIAN_GUEST_DIS
 - 封存前后的 HS RAM 执行、text/rodata 写入对照，共 6 项。
 - 封存前后各 9 项 SBI guard 检查。
 - 外层用户态执行成功、HS 执行同一物理页被拒绝、用户态再次执行成功。
-- guest 启动、内核/内存/时间检查、关机返回及外层同页保护复测。
+- guest 启动前后分别执行 12 项 syscall 接口拒绝检查、2 项新命令拒绝检查及 3 轮 × 4 项固定目标 HS 访问检查。
+- guest 启动、内核/内存/时间检查、关机返回及外层保护复测。
 
-**返回外层后实际重跑的是同页探针；HS 6/6 与 SBI 18/18 核对本次启动的结果。**
+**返回外层后实际重跑同页探针、syscall 接口拒绝与固定目标保护测试；HS 6/6 与 SBI 18/18 核对本次启动的结果。**
+
+新增 syscall 测试的范围、升级步骤和快照检查见 [syscall 保护测试](docs/03-pmp-virt-kvm/syscall-protection.md)。
 目前不据此宣称覆盖 G-stage.Virt、完整 VS/VU 同页配对、多核、长期压力或完整安全审计。
 文件摘要用于版本一致性和构建配对，不替代来源认证。
 

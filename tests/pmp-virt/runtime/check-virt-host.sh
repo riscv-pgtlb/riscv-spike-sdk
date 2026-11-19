@@ -23,4 +23,6 @@ if grep -Eq 'PMP.Virt .*FAIL|PMP.Virt seal FATAL' "$log_file"; then
     exit 1
 fi
 /usr/bin/pv-user-test
-echo 'VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, /dev/kvm'
+/usr/bin/pv-syscall-api
+/usr/bin/pv-syscall-attack
+echo 'VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, syscall API, syscall attack, /dev/kvm'

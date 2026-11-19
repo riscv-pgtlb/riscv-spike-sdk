@@ -19,6 +19,9 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("virt_build", ROOT / "scripts/build/virt-kvm.py")
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
+spec = importlib.util.spec_from_file_location("syscall_evidence", ROOT / "tests/pmp-virt/regression/run-suite.py")
+evidence = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(evidence)
 STEPS = (
     "VIRT-REGRESSION HOST BEFORE PASS",
     "VIRT-REGRESSION GUEST PASS",
@@ -30,23 +33,28 @@ STEPS = (
 
 
 def check_transcript(text):
-    if re.search(r"VIRT-REGRESSION FAIL|PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic", text):
+    if re.search(r"VIRT-REGRESSION FAIL|PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL", text):
         raise RuntimeError("Failure marker in the runtime transcript")
     position = 0
+    positions = []
     for marker in STEPS:
         found = re.search(r"(?m)^" + re.escape(marker) + r"\r*$", text[position:])
         if not found:
             raise RuntimeError(f"Missing or out-of-order runtime result: {marker}")
+        positions.append((position + found.start(), position + found.end()))
         position += found.end()
     before = re.search(r"(?m)^VIRT-REGRESSION HOST BEFORE PASS\r*$", text)
     returned = re.search(r"(?m)^VIRT-REGRESSION GUEST RETURNED\r*$", text)
     checker = ROOT / "tests/pmp-virt/runtime/check-virt-vs-hs.sh"
-    evidence = text[before.end():returned.start()] if before and returned and before.end() < returned.start() else ""
-    checked = subprocess.run(["sh", str(checker)], input=evidence, text=True, capture_output=True)
+    guest_evidence = text[before.end():returned.start()] if before and returned and before.end() < returned.start() else ""
+    checked = subprocess.run(["sh", str(checker)], input=guest_evidence, text=True, capture_output=True)
     if checked.returncode:
         raise RuntimeError("Missing or invalid VS-HS-VS same-page evidence")
     if "PMP.Virt SEALED:" not in text or "VIRT-KVM GUEST BOOTED" not in text:
         raise RuntimeError("Missing firmware seal or guest boot result")
+    for phase in (text[:positions[0][0]], text[positions[3][1]:positions[4][0]]):
+        if not evidence.syscall_checks(evidence.canonical_lines(phase)):
+            raise RuntimeError("Missing, duplicate or incorrect syscall results before/after guest")
 
 
 def main():
@@ -103,7 +111,7 @@ def main():
                 sys.stdout.write(text)
                 sys.stdout.flush()
                 transcript += text
-                if re.search(r"VIRT-REGRESSION FAIL|PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic", transcript):
+                if re.search(r"VIRT-REGRESSION FAIL|PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL", transcript):
                     raise RuntimeError("Guest or host emitted a failure marker")
                 if not logged_in and re.search(r"login:\s*$", transcript):
                     process.stdin.write(b"root\n")

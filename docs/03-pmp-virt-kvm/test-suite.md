@@ -248,12 +248,12 @@ lkvm 日志是 host ioctl 成功后的桥接记录，COMPLETE 只有 host 检查
 [TEST 07] [PASS] 内核 rodata 写保护：可写别名访问被拒绝
 [TEST 08] [PASS] 封存前 SBI 接口限制检查（9/9）
 [TEST 09] [PASS] 封存后 SBI 接口限制检查（9/9）
-[TEST 10] [PASS] guest 启动前：host 检查与 HU–HS–HU 同页探针
+[TEST 10] [PASS] guest 启动前：host、HU–HS–HU 同页及 syscall 检查
 [TEST 11] [PASS] VS–HS–VS 同物理页执行权限对照
 [TEST 12] [PASS] guest 内核、内存与时钟推进
 [TEST 13] [PASS] guest 自动关机请求
 [TEST 14] [PASS] guest 正常退出并返回 host
-[TEST 15] [PASS] guest 返回后：host 检查与 HU–HS–HU 同页复测
+[TEST 15] [PASS] guest 返回后：host、HU–HS–HU 同页及 syscall 复测
 [TEST 16] [PASS] 完整回归结果与事件顺序
 [TEST 17] [PASS] 测试命令与 QEMU 正常退出
 
@@ -263,3 +263,8 @@ lkvm 日志是 host ioctl 成功后的桥接记录，COMPLETE 只有 host 检查
 ```
 
 summary.txt 使用相同编号、名称和三行汇总；result.json 新增 counts（total/passed/failed/skipped），保留各项 detail 和 elapsed_seconds。失败不会伪装成 17/17，诊断信息仍输出。
+
+
+## 与远程 syscall 实验合并
+
+主项目合并本地 VS–HS–VS 集成与远程 syscall 实验后，保留第 11 项及 17 项总数。第 10、15 项的 host 检查同时要求 syscall API 拒绝测试和三轮固定目标保护测试，不能用最终 HOST PASS 替代逐项证据。详细合并版本及验证边界见 [合并记录](merge-syscall-vs-hs.md)。
