@@ -144,7 +144,10 @@ make pmpvirt-test   DEBIAN_HOST_DISK=/path/to/debian-host.raw   DEBIAN_GUEST_DIS
 
 ## 已验证范围
 
-**2026-11-17 最近归档的一轮：84 项自动测试通过，双 Debian 的 16 个汇总测试点全部通过。**
+**2026-11-19 syscall 迁移验证：86 项自动测试通过，Buildroot 与正常双 Debian 回归各 16/16 通过，Debian 快照检查通过且磁盘内容不变。**
+本轮详情见 [syscall 迁移验证记录](docs/04-dual-debian/syscall-validation.md)。
+
+2026-11-17 历史归档：84 项自动测试通过，双 Debian 的 16 个汇总测试点全部通过。
 已完成自动更新后的文件检查、服务器版本配对、保护回归和正常关机。
 对应证据与结果见 [验证记录](docs/04-dual-debian/validation.md) 和 [实验报告](docs/04-dual-debian/experiment-report.md)。
 
