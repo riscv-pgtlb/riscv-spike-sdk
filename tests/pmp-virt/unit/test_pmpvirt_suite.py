@@ -15,11 +15,21 @@ suite = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(suite)
 
 
+def syscall_output():
+    lines = list(suite.SYSCALL_SUMMARIES[:2])
+    for round in range(1, 4):
+        for name, cause in (("ordinary-data-store-control", 0), ("HS-data-page-execute", 1),
+                            ("kernel-text-store", 7), ("kernel-rodata-store", 7)):
+            lines.append(f"SYSCALL-ATTACK PASS {name} round={round} cause={cause} bytes=unchanged")
+    lines.append(suite.SYSCALL_SUMMARIES[2])
+    return "\n".join(lines)
+
+
 def same_page():
     return "\n".join((
         "PASS U execute before HS probe: value=42 VA=0x1234",
         "PASS HS denied same physical page: PA=0x90001000 cause=1",
-        "PASS U execute after HS probe: value=42", suite.USER_PASS, suite.HOST_PASS))
+        "PASS U execute after HS probe: value=42", suite.USER_PASS, syscall_output(), suite.HOST_PASS))
 
 
 def transcript():
@@ -38,6 +48,27 @@ def transcript():
 
 
 class SuiteResultChecks(unittest.TestCase):
+    def test_syscalls_require_all_operations_correct_causes_and_both_phases(self):
+        original = transcript()
+        for phase in (0, 1):
+            parts = original.split(syscall_output())
+            for line in syscall_output().splitlines():
+                for changed in ("", "# echo " + line, line + "\n" + line,
+                                line.replace("cause=7", "cause=15")):
+                    if changed == line:
+                        continue
+                    with self.subTest(phase=phase, line=line, changed=changed):
+                        changed_output = syscall_output().replace(line, changed)
+                        text = (parts[0] + (changed_output if phase == 0 else syscall_output())
+                                + parts[1] + (changed_output if phase == 1 else syscall_output()) + parts[2])
+                        results = suite.runtime_results(text)
+                        self.assertFalse(results["host_before" if phase == 0 else "host_after"])
+                        self.assertTrue(results["host_after" if phase == 0 else "host_before"])
+
+    def test_syscall_failure_overrides_final_success(self):
+        for marker in ("SYSCALL-API FAIL", "SYSCALL-ATTACK FAIL"):
+            self.assertFalse(suite.runtime_results(transcript() + marker + "\n")["runtime"])
+
     def test_server_versions_are_required_on_both_host_checks_and_guest(self):
         versions = {"host": "a" * 64, "guest": "b" * 64}
         results = suite.runtime_results(transcript(), expected_versions=versions)

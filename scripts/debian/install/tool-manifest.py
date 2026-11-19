@@ -10,6 +10,8 @@ HELPER = "scripts/debian/install/install-tools.sh"
 HOST = (
     ("build/virt-kvm/src/kvmtool/lkvm-static", "payload/lkvm", "0755", "/usr/bin/lkvm"),
     ("build/virt-kvm/out/pv-user-test", "payload/pv-user-test", "0755", "/usr/bin/pv-user-test"),
+    ("build/virt-kvm/out/pv-syscall-api", "payload/pv-syscall-api", "0755", "/usr/bin/pv-syscall-api"),
+    ("build/virt-kvm/out/pv-syscall-attack", "payload/pv-syscall-attack", "0755", "/usr/bin/pv-syscall-attack"),
     ("build/virt-kvm/out/linux-guest/arch/riscv/boot/Image", "payload/Image", "0644", "/opt/guest/Image"),
     ("tests/pmp-virt/runtime/check-host.sh", None, "0755", "/usr/bin/check-virt-host"),
     ("scripts/debian/run/run-debian-guest.sh", "payload/run-debian-guest", "0755", "/usr/local/bin/run-debian-guest"),

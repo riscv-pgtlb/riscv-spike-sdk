@@ -18,6 +18,17 @@ regression = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(regression)
 
 
+def runtime_lines():
+    lines = ["PMP.Virt SEALED:", "VIRT-KVM GUEST BOOTED"]
+    # Reuse the complete captured-format fixture, then mutate it in parser tests.
+    from test_pmpvirt_suite import syscall_output
+    for marker in regression.STEPS:
+        if marker in (regression.STEPS[0], regression.STEPS[4]):
+            lines += syscall_output().splitlines()
+        lines.append(marker)
+    return lines
+
+
 def git(path, *args):
     return subprocess.check_output(["git", "-C", str(path), *args], text=True).strip()
 
@@ -202,7 +213,7 @@ class BuildChecks(unittest.TestCase):
         self.assertNotIn("pmp-virt/patches", source)
 
     def test_runtime_parser_accepts_nested_serial_carriage_returns(self):
-        lines = ["PMP.Virt SEALED:", "VIRT-KVM GUEST BOOTED", *regression.STEPS]
+        lines = runtime_lines()
         transcript = "".join(line + ("\r\r\n" if "GUEST PASS" in line or "GUEST SHUTDOWN" in line else "\r\n") for line in lines)
         regression.check_transcript(transcript)
         for marker in regression.STEPS:
@@ -212,7 +223,7 @@ class BuildChecks(unittest.TestCase):
             regression.check_transcript(transcript + "VIRT-REGRESSION FAIL guest checks\r\r\n")
 
     def test_runtime_parser_rejects_echoed_or_missing_results(self):
-        valid = "PMP.Virt SEALED:\nVIRT-KVM GUEST BOOTED\n" + "\n".join(regression.STEPS) + "\n"
+        valid = "\n".join(runtime_lines()) + "\n"
         regression.check_transcript(valid)
         for invalid in (valid.replace(regression.STEPS[1], "# echo '" + regression.STEPS[1] + "'"),
                         valid.replace(regression.STEPS[3], ""),

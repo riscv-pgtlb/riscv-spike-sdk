@@ -70,7 +70,9 @@ def verify_inputs():
     state = json.loads(SOURCE_LOCK.read_text())
     if state.get("schema") != 1 or state.get("sources") != SOURCES:
         fail("Source lock changed during this process; restart after reviewing it")
-    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/runtime/user-exec.c", *SCRIPT_INPUTS):
+    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/runtime/user-exec.c",
+                     "tests/pmp-virt/runtime/syscall-api.c", "tests/pmp-virt/runtime/syscall-attack.c",
+                     *SCRIPT_INPUTS):
         if not (ROOT / filename).is_file():
             fail(f"Missing SDK input: {filename}")
 
@@ -410,6 +412,8 @@ def package_rootfs(base):
     images.mkdir(parents=True, exist_ok=True)
     elf_machine(WORK / "src/kvmtool/lkvm-static", 243)
     elf_machine(WORK / "out/pv-user-test", 243)
+    for name in ("syscall-api", "syscall-attack"):
+        elf_machine(WORK / "out" / ("pv-" + name), 243)
     with tempfile.TemporaryDirectory(prefix="pack-", dir=WORK) as temporary:
         staging = Path(temporary)
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
@@ -425,6 +429,8 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         install(WORK / "src/kvmtool/lkvm-static", staging / "usr/bin/lkvm", True)
         install(WORK / "out/pv-user-test", staging / "usr/bin/pv-user-test", True)
+        for name in ("syscall-api", "syscall-attack"):
+            install(WORK / "out" / ("pv-" + name), staging / "usr/bin" / ("pv-" + name), True)
         install(ROOT / "tests/pmp-virt/runtime/check-host.sh", staging / "usr/bin/check-virt-host", True)
         install(ROOT / "scripts/buildroot/run-virt-guest.sh", staging / "usr/bin/run-virt-guest", True)
         install(ROOT / "scripts/buildroot/run-virt-debian.sh", staging / "usr/bin/run-virt-debian", True)
@@ -439,11 +445,13 @@ def artifact_paths():
         "out/linux-host/arch/riscv/boot/Image", "out/linux-host/.config", "out/linux-host/System.map",
         "out/linux-guest/arch/riscv/boot/Image", "out/linux-guest/.config",
         "out/opensbi/platform/generic/firmware/fw_jump.bin", "out/opensbi/platform/generic/kconfig/.config",
-        "out/qemu/qemu-system-riscv64", "out/pv-user-test", "src/kvmtool/lkvm-static",
+        "out/qemu/qemu-system-riscv64", "out/pv-user-test",
+        "out/pv-syscall-api", "out/pv-syscall-attack", "src/kvmtool/lkvm-static",
         "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
     )] + [ROOT / filename for filename in (
         "conf/pmp-virt/linux.config", "conf/pmp-virt/sources.json", "conf/rootfs-overlay/etc/inittab",
-        "tests/pmp-virt/runtime/user-exec.c", *SCRIPT_INPUTS)]
+        "tests/pmp-virt/runtime/user-exec.c", "tests/pmp-virt/runtime/syscall-api.c",
+        "tests/pmp-virt/runtime/syscall-attack.c", *SCRIPT_INPUTS)]
 
 
 def manifest(base=None, cross=None, compiler_version=None):
@@ -520,6 +528,9 @@ def build(jobs):
     lkvm = verify_source("kvmtool")
     run(["make", "-C", lkvm, "ARCH=riscv", f"CROSS_COMPILE={cross}", f"LIBFDT_DIR={dtc / 'libfdt'}", f"-j{jobs}", "lkvm-static"])
     run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", ROOT / "tests/pmp-virt/runtime/user-exec.c", "-o", WORK / "out/pv-user-test"])
+    for name in ("syscall-api", "syscall-attack"):
+        run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static",
+             ROOT / "tests/pmp-virt/runtime" / (name + ".c"), "-o", WORK / "out" / ("pv-" + name)])
     package_rootfs(base)
     manifest(base, cross)
     verify()

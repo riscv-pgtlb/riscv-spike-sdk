@@ -20,6 +20,7 @@ class PackageLayoutChecks(unittest.TestCase):
                          "tests/pmp-virt/runtime", "tests/pmp-virt/regression/debian"):
             shutil.copytree(ROOT / relative, self.root / relative)
         for relative in ("build/virt-kvm/src/kvmtool/lkvm-static", "build/virt-kvm/out/pv-user-test",
+                         "build/virt-kvm/out/pv-syscall-api", "build/virt-kvm/out/pv-syscall-attack",
                          "build/virt-kvm/out/linux-guest/arch/riscv/boot/Image"):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +68,8 @@ class PackageLayoutChecks(unittest.TestCase):
                        env=env, check=True, capture_output=True)
         self.assertTrue((installed / "usr/local/libexec/virt-tools/update-tools").is_file())
         if role == "host":
+            for name in ("pv-syscall-api", "pv-syscall-attack"):
+                self.assertTrue((installed / "usr/bin" / name).is_file())
             self.assertTrue((installed / "usr/local/bin/run-debian-guest").is_file())
             self.assertTrue((installed / "usr/local/bin/update-virt-tools").is_file())
             self.assertTrue((installed / "usr/local/bin/test-virt-debian-all").is_file())

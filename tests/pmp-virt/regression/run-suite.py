@@ -29,14 +29,14 @@ RUNTIME_CASES = (
     ("hs_rodata", "启动探针：rodata 可写别名，封存后写入拒绝"),
     ("sbi_before", "启动检查：封存前 SBI guard 9/9"),
     ("sbi_after", "启动检查：封存后 SBI guard 9/9"),
-    ("host_before", "guest 启动前：同页 U → HS → U 与 host 检查"),
+    ("host_before", "guest 启动前：同页 U → HS → U、syscall 接口与保护检查"),
     ("guest", "guest 内核、内存和时间检查"),
     ("guest_shutdown", "guest 自动关机请求"),
     ("guest_return", "guest 正常返回，套件确认内层结果"),
-    ("host_after", "guest 返回后：重新执行同页测试并复核启动结果"),
+    ("host_after", "guest 返回后：重新执行同页、syscall 测试并复核启动结果"),
     ("runtime", "完整套件 ALL PASS 与结果顺序"),
 )
-HOST_PASS = "VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, /dev/kvm"
+HOST_PASS = "VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, syscall API, syscall attack, /dev/kvm"
 USER_PASS = "PMP.Virt USER SUMMARY: PASS U-success / HS-access-fault / U-success"
 
 
@@ -82,6 +82,25 @@ def same_page(lines):
         r"PASS U execute after HS probe: value=42", re.escape(USER_PASS), re.escape(HOST_PASS)))
 
 
+SYSCALL_SUMMARIES = (
+    "SYSCALL-API SUMMARY: PASS 12/12 rejection cases",
+    "SYSCALL-ATTACK API: PASS 2/2 rejection checks",
+    "SYSCALL-ATTACK SUMMARY: PASS 12/12 checks (3 rounds x 4 cases)",
+)
+
+
+def syscall_checks(lines):
+    """Require complete, unique and ordered evidence in each host phase."""
+    expected = list(SYSCALL_SUMMARIES[:2])
+    for round in range(1, 4):
+        for name, cause in (("ordinary-data-store-control", 0), ("HS-data-page-execute", 1),
+                            ("kernel-text-store", 7), ("kernel-rodata-store", 7)):
+            expected.append(f"SYSCALL-ATTACK PASS {name} round={round} cause={cause} bytes=unchanged")
+    expected.append(SYSCALL_SUMMARIES[2])
+    actual = [line for line in lines if line.startswith(("SYSCALL-ATTACK ", "SYSCALL-API SUMMARY:"))]
+    return actual == expected
+
+
 def runtime_results(text, expected_versions=None):
     """Only real complete output lines count; shell echoes are not results."""
     lines = canonical_lines(text)
@@ -106,7 +125,7 @@ def runtime_results(text, expected_versions=None):
     returned = index("VIRT-REGRESSION GUEST RETURNED")
     after = index("VIRT-REGRESSION HOST AFTER PASS")
     if before is not None:
-        outcomes["host_before"] = same_page(lines[:before])
+        outcomes["host_before"] = same_page(lines[:before]) and syscall_checks(lines[:before])
     if before is not None and returned is not None and before < returned:
         guest = lines[before + 1:returned]
         check = r"(?:check-virt-guest\[\d+\]: )?VIRT-REGRESSION GUEST PASS"
@@ -115,7 +134,7 @@ def runtime_results(text, expected_versions=None):
         outcomes["guest_shutdown"] = ordered(guest, (check, shutdown))
         outcomes["guest_return"] = outcomes["guest_shutdown"]
     if returned is not None and after is not None and returned < after:
-        outcomes["host_after"] = same_page(lines[returned + 1:after])
+        outcomes["host_after"] = same_page(lines[returned + 1:after]) and syscall_checks(lines[returned + 1:after])
     if expected_versions:
         host_marker = f"VIRT TOOLS VERSION PASS role=host version={expected_versions['host']}"
         outcomes["host_before"] &= before is not None and host_marker in lines[:before]
@@ -128,7 +147,7 @@ def runtime_results(text, expected_versions=None):
     outcomes["runtime"] = ordered(lines, tuple(re.escape(marker) for marker in (
         "VIRT-REGRESSION HOST BEFORE PASS", "VIRT-REGRESSION GUEST RETURNED",
         "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS")))
-    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic", text):
+    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL", text):
         outcomes["runtime"] = False
     return outcomes
 
