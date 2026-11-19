@@ -28,3 +28,6 @@ log
 
 __pycache__/
 *.pyc
+
+# Guest Linux development worktree (shared with repo/linux)
+/repo/linux-guest/

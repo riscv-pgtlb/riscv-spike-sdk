@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+# 动态加载维护模块 maintenance.py
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("debian_maintenance", ROOT / "scripts/debian/common/maintenance.py")
 maintenance = importlib.util.module_from_spec(spec)
@@ -21,6 +22,7 @@ def main():
         [sys.executable, str(ROOT / "scripts/build/virt-kvm.py"), "verify"],
         cwd=ROOT, check=True,
     )
+    # 依次初始化两套系统
     for role in ("host", "guest"):
         maintenance.provision(deploy, role)
     print("DUAL DEBIAN PROVISION PASS")

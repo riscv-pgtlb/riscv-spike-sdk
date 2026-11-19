@@ -20,9 +20,9 @@ class ServerUpdateChecks(unittest.TestCase):
         self.guest = self.root / "guest.raw"
         self.host.write_bytes(b"host contents")
         self.guest.write_bytes(b"guest contents")
-        tools = self.root / "build/debian-host-transfer"
+        tools = self.root / "build/debian-tools"
         tools.mkdir(parents=True)
-        for name in ("dual-debian-tools.tar.gz", "debian-guest-tools.tar.gz", "SHA256SUMS",
+        for name in ("debian-host-tools.tar.gz", "debian-guest-tools.tar.gz", "SHA256SUMS",
                      "HOST-VERSION", "GUEST-VERSION"):
             (tools / name).write_text("fixture")
         bootstrap = self.root / "scripts/debian/update/update-system.sh"

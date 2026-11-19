@@ -30,6 +30,7 @@ fi
 printf 'UUID=%s / ext4 defaults,errors=remount-ro 0 1\n' \
     "$root_uuid" > /etc/fstab
 
+# 设置持久主机名
 name="debian-$role"
 printf '%s\n' "$name" > /etc/hostname
 

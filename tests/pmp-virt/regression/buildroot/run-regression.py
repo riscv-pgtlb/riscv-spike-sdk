@@ -38,6 +38,13 @@ def check_transcript(text):
         if not found:
             raise RuntimeError(f"Missing or out-of-order runtime result: {marker}")
         position += found.end()
+    before = re.search(r"(?m)^VIRT-REGRESSION HOST BEFORE PASS\r*$", text)
+    returned = re.search(r"(?m)^VIRT-REGRESSION GUEST RETURNED\r*$", text)
+    checker = ROOT / "tests/pmp-virt/runtime/check-virt-vs-hs.sh"
+    evidence = text[before.end():returned.start()] if before and returned and before.end() < returned.start() else ""
+    checked = subprocess.run(["sh", str(checker)], input=evidence, text=True, capture_output=True)
+    if checked.returncode:
+        raise RuntimeError("Missing or invalid VS-HS-VS same-page evidence")
     if "PMP.Virt SEALED:" not in text or "VIRT-KVM GUEST BOOTED" not in text:
         raise RuntimeError("Missing firmware seal or guest boot result")
 

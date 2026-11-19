@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 
+# 检查已安装工具的角色、版本、文件内容和权限是否符合记录
 root= expected= required_role=
 while [ "$#" -gt 0 ]; do
     case "$1" in

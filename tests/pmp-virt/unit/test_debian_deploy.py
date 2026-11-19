@@ -168,39 +168,39 @@ class GuestInstallerChecks(unittest.TestCase):
         live = self.log.read_text().splitlines()
         self.log.unlink()
         self.env["TEST_KERNEL"] = "6.17.2-pmpvirt-kvm-host+"
-        self.assertEqual(self.run_installer("--offline").returncode, 0)
-        offline = self.log.read_text().splitlines()
+        self.assertEqual(self.run_installer("--maintenance").returncode, 0)
+        maintenance = self.log.read_text().splitlines()
         self.assertTrue((self.installed / "usr/local/bin/check-virt-tools").is_file())
         self.assertEqual((self.installed / "var/lib/virt-tools/VERSION").read_text(),
                          (self.bundle / "metadata/guest/VERSION").read_text())
         self.assertIn("systemctl daemon-reload", live)
-        self.assertEqual([s for s in offline if s.startswith("systemctl ")], [
+        self.assertEqual([s for s in maintenance if s.startswith("systemctl ")], [
             f"systemctl --root={self.installed} enable virt-guest-test.service",
             f"systemctl --root={self.installed} is-enabled virt-guest-test.service"])
 
-    def test_offline_requires_exact_boot_marker(self):
+    def test_maintenance_requires_exact_boot_marker(self):
         for cmdline in ("console=ttyS0", "debian_provision=10", "x_debian_provision=1"):
             with self.subTest(cmdline=cmdline):
                 self.cmdline.write_text(cmdline)
-                self.assertNotEqual(self.run_installer("--offline").returncode, 0)
+                self.assertNotEqual(self.run_installer("--maintenance").returncode, 0)
                 self.assertFalse(self.log.exists())
 
     def test_unknown_arguments_rejected(self):
-        for args in (("--force",), ("--offline", "extra")):
+        for args in (("--force",), ("--maintenance", "extra")):
             self.assertEqual(self.run_installer(*args).returncode, 2)
         self.assertFalse(self.log.exists())
 
-    def test_offline_checks_arch_root_and_debian(self):
+    def test_maintenance_checks_arch_root_and_debian(self):
         for variable, value in (("TEST_ARCH", "x86_64"), ("TEST_UID", "1000")):
             with patch.dict(self.env, {variable: value}):
-                self.assertNotEqual(self.run_installer("--offline").returncode, 0)
+                self.assertNotEqual(self.run_installer("--maintenance").returncode, 0)
         self.release.write_text("ID=other\n")
-        self.assertNotEqual(self.run_installer("--offline").returncode, 0)
+        self.assertNotEqual(self.run_installer("--maintenance").returncode, 0)
         self.assertFalse(self.log.exists())
 
     def test_missing_service_rejected_before_partial_install(self):
         (self.bundle / "tests/pmp-virt/regression/debian/virt-guest-test.service").unlink()
-        self.assertNotEqual(self.run_installer("--offline").returncode, 0)
+        self.assertNotEqual(self.run_installer("--maintenance").returncode, 0)
         self.assertFalse(self.log.exists())
 
 

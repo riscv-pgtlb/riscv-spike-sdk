@@ -129,7 +129,7 @@ Debian 只替换用户空间和根磁盘；PMP.Virt 的核心规则仍在 QEMU�
 
 ### 3.3 同一物理页的 U → HS → U
 
-[user-exec.c](../../tests/pmp-virt/runtime/user-exec.c) 编译为 `pv-user-test`，步骤是：
+[pv-user-test.c](../../tests/pmp-virt/runtime/pv-user-test.c) 编译为 `pv-user-test`，步骤是：
 
 1. 用户态申请 RW/NX 匿名页，写入固定指令，再改成 RX。
 2. 用户态执行，确认返回值为 42。
@@ -229,10 +229,10 @@ make virt-test
 ### 5.2 用户空间：check-virt-host 到同页探针
 
 ```text
-check-virt-host（源码 tests/pmp-virt/runtime/check-host.sh）
+check-virt-host（源码 tests/pmp-virt/runtime/check-virt-host.sh）
 ├─ 核对 host 内核身份、/dev/kvm、/dev/pvtest
 ├─ dmesg 检查封存确认、HS 6/6、SBI guard 18/18，拒绝失败标记
-└─ /usr/bin/pv-user-test（由 user-exec.c 编译）
+└─ /usr/bin/pv-user-test（由 pv-user-test.c 编译）
    ├─ U 执行固定指令，返回 42
    ├─ ioctl(/dev/pvtest, PV_USER_PROBE)
    │  └─ 内核 pv_user_ioctl()
@@ -275,11 +275,11 @@ make virt-test
 └─ tests/pmp-virt/regression/buildroot/run-regression.py
    ├─ 校验产物和源码版本，启动 virt-kvm.py run
    ├─ 驱动外层登录，执行 /usr/bin/test-virt-all
-   │  └─ run-host-suite.sh
+   │  └─ test-virt-all.sh
    │     ├─ check-virt-host
    │     ├─ run-virt-guest --regression
    │     │  ├─ 再检查 host 保护
-   │     │  └─ lkvm → guest → guest-autorun.sh
+   │     │  └─ lkvm → guest → virt-guest-autorun.sh
    │     │     └─ check-virt-guest → 关机
    │     └─ 返回 host，再执行 check-virt-host
    └─ 检查结果顺序、退出 QEMU、归档控制台和结果
@@ -308,3 +308,10 @@ Buildroot 自动回归在服务器 `build/virt-kvm/logs/regression-*/` 保存控
 
 它不能替代 G-stage.Virt、VS/VU 同页配对、SMP、长期压力或完整攻击面审计。QEMU 模拟、固件和测试接口均是实验的一部分；OpenSBI 处于可信位置，摘要配对也不等同于安全启动或运行时完整性认证。
 本文依据当前源码解释机制与调用关系，编写文档本身不代表重新执行测试；已有结果与待验收事项见 [双 Debian 验证记录](../04-dual-debian/validation.md)。
+
+
+## 新增 VS–HS–VS 协作测试
+
+SDK 已接入 guest 内核探针、lkvm 实验 SBI 协调和 host 固定页接口，作为统一套件的第 11 项。guest 使用启动开关 pmpvirt_guest_test=1，lkvm 使用 --pmp-virt-test；HU–HS–HU 的 pv-user-test 保留原用途。完整阶段、配套提交和逐文件改动见 [SDK 集成记录](vs-hs-sdk-integration.md)。
+
+当前只通过单元测试和先前的组件编译检查，尚未验证真实虚拟机中的 VS–HS–VS 结果，因此前文对已完成运行验证的边界仍然成立。

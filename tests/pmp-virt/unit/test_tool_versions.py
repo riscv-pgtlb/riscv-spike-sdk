@@ -79,7 +79,7 @@ class InstalledVersionChecks(unittest.TestCase):
     def test_stale_but_consistent_installation_rejects_server_version(self):
         installed, _ = self.install()
         self.assertEqual(self.check(installed).returncode, 0)
-        path = self.root / "tests/pmp-virt/runtime/check-guest.sh"
+        path = self.root / "tests/pmp-virt/runtime/check-virt-guest.sh"
         path.write_bytes(path.read_bytes() + b"\n# updated\n")
         result = self.check(installed, tools.expected_versions(self.root)["guest"])
         self.assertNotEqual(result.returncode, 0)

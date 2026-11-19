@@ -19,12 +19,12 @@ mount -o remount,rw /
 work_dir=$(mktemp -d /run/debian-update.XXXXXX)
 case "$role" in
     host)
-        tar -xzf dual-debian-tools.tar.gz -C "$work_dir"
+        tar -xzf debian-host-tools.tar.gz -C "$work_dir"
         bash "$work_dir/scripts/debian/install/install-host.sh"
         ;;
     guest)
         tar -xzf debian-guest-tools.tar.gz -C "$work_dir"
-        sh "$work_dir/scripts/debian/install/install-guest.sh" --offline
+        sh "$work_dir/scripts/debian/install/install-guest.sh" --maintenance
         ;;
 esac
 sync

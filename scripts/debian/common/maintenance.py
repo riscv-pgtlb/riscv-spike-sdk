@@ -9,7 +9,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[3]
 
-
+# 启动一套临时维护虚拟机，在其中初始化或更新系统盘
 def provision(deploy, role, timeout=900, action="provision"):
     if role not in ("host", "guest"):
         raise RuntimeError("Role must be host or guest")
@@ -17,6 +17,8 @@ def provision(deploy, role, timeout=900, action="provision"):
         raise RuntimeError("Action must be provision or update")
     label = action.upper()
     log_path = deploy / f"{action}-{role}.log"
+    # 构造 QEMU 启动命令
+    # 一次只启动一块系统盘；另一块设备是只读传输盘 setup.tar
     command = [
         str(ROOT / "build/virt-kvm/out/qemu/qemu-system-riscv64"),
         "-machine", "virt", "-accel", "tcg",
@@ -32,18 +34,21 @@ def provision(deploy, role, timeout=900, action="provision"):
         "console=ttyS0 earlycon=sbi root=/dev/vda1 rw rootwait maxcpus=1 init=/bin/sh debian_provision=1",
     ]
 
-    # 一次只启动一块系统盘；另一块设备是只读传输盘。
+    # 准备发送给虚拟机的命令
+    # - 从 /dev/vdb 解压 setup.tar
+    # - 执行对应的配置脚本 update-system.sh 或 provision-system.sh
     setup = (
         "mount -t proc proc /proc && "
         "mount -t sysfs sysfs /sys && "
-        "mkdir -p /run/debian-init && "
-        "tar -xf /dev/vdb -C /run/debian-init && "
+        "mkdir -p /run/debian-init && "     
+        "tar -xf /dev/vdb -C /run/debian-init && "      
         f"sh /run/debian-init/{action}-system.sh {role}; "
         f"rc=$?; printf '\\nDEBIAN {label} EXIT {role}: %s\\n' \"$rc\"; "
         "sync; poweroff -f\n"
     )
 
     print(f"{action}: {role}; log: {log_path}", flush=True)
+    # 启动 QEMU
     process = subprocess.Popen(
         command, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -55,7 +60,7 @@ def provision(deploy, role, timeout=900, action="provision"):
     deadline = time.monotonic() + timeout
 
     try:
-        with log_path.open("wb") as log:
+        with log_path.open("wb") as log:  # 持续保存日志，等待 shell 出现
             while True:
                 if time.monotonic() > deadline:
                     raise RuntimeError(f"{role}: initialization timed out")
@@ -70,12 +75,13 @@ def provision(deploy, role, timeout=900, action="provision"):
                 log.write(chunk)
                 log.flush()
                 tail = (tail + chunk)[-8192:]
+                # 发现 root shell 后发送命令 setup
                 if not sent and re.search(rb"(?:^|[\r\n])# $", tail):
                     process.stdin.write(setup.encode())
                     process.stdin.flush()
                     sent = True
             result = process.wait(timeout=30)
-    finally:
+    finally:        # 无论成功失败，都清理进程
         selector.close()
         if process.poll() is None:
             process.terminate()
@@ -87,6 +93,7 @@ def provision(deploy, role, timeout=900, action="provision"):
         process.stdin.close()
         process.stdout.close()
 
+    # 检查操作是否真正成功
     lines = log_path.read_bytes().replace(b"\r", b"").splitlines()
     marker = f"DEBIAN {label} PASS: {role}".encode()
     exit_marker = f"DEBIAN {label} EXIT {role}: 0".encode()
@@ -94,7 +101,7 @@ def provision(deploy, role, timeout=900, action="provision"):
         raise RuntimeError(f"{role}: initialization failed; inspect {log_path}")
     print(f"DEBIAN {label} VERIFIED: {role}", flush=True)
 
-
+# 检查部署文件是否齐全，以及文件是否彼此独立
 def validate_deploy(deploy):
     for name in ("debian-host.raw", "debian-guest.raw", "setup.tar"):
         if not (deploy / name).is_file():
@@ -104,6 +111,8 @@ def validate_deploy(deploy):
     transfer = deploy / "setup.tar"
     if any(transfer.samefile(deploy / f"debian-{role}.raw") for role in ("host", "guest")):
         raise RuntimeError("Transfer archive must be separate from system disks")
+
+# 尝试获取磁盘写入权限，检查是否存在使用冲突
 def check_stopped(host, guest=None):
     # Open BOTH disks writable without running a CPU. QEMU rejects disks already
     # held by another writer, including an active dual-Debian VM.

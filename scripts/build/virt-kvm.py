@@ -21,11 +21,11 @@ RAM_BASE = 0x80000000
 RAM_SIZE = 2048 * 1024 * 1024
 LOAD_ADDRESS = 0x80200000
 SOURCES = json.loads(SOURCE_LOCK.read_text())["sources"]
-DIRECT = {"linux-host", "opensbi", "qemu"}
+DIRECT = {"linux-host", "linux-guest", "opensbi", "qemu"}
 SCRIPT_INPUTS = ("scripts/build/virt-kvm.py", "scripts/buildroot/run-virt-guest.sh",
-                 "scripts/buildroot/run-virt-debian.sh", "tests/pmp-virt/runtime/check-host.sh",
-                 "tests/pmp-virt/runtime/check-guest.sh", "tests/pmp-virt/regression/buildroot/run-host-suite.sh",
-                 "tests/pmp-virt/regression/buildroot/guest-autorun.sh")
+                 "scripts/buildroot/run-virt-debian.sh", "tests/pmp-virt/runtime/check-virt-host.sh",
+                 "tests/pmp-virt/runtime/check-virt-guest.sh", "tests/pmp-virt/runtime/check-virt-vs-hs.sh", "tests/pmp-virt/regression/buildroot/test-virt-all.sh",
+                 "tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
 
@@ -70,7 +70,7 @@ def verify_inputs():
     state = json.loads(SOURCE_LOCK.read_text())
     if state.get("schema") != 1 or state.get("sources") != SOURCES:
         fail("Source lock changed during this process; restart after reviewing it")
-    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/runtime/user-exec.c", *SCRIPT_INPUTS):
+    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/runtime/pv-user-test.c", *SCRIPT_INPUTS):
         if not (ROOT / filename).is_file():
             fail(f"Missing SDK input: {filename}")
 
@@ -82,8 +82,9 @@ def require_checkout():
 
 
 def checked_submodule(name):
-    # Guest reuses Linux history but builds an upstream commit in a private clone.
-    details = SOURCES["linux-host" if name == "linux-guest" else name]
+    if name == "linux-guest":
+        return checked_guest()
+    details = SOURCES[name]
     relative = details["path"]
     expected = details["revision"]
     source = ROOT / relative
@@ -102,6 +103,40 @@ def checked_submodule(name):
     if run(["git", "-C", source, "status", "--porcelain", "--untracked-files=all"], capture=True).strip():
         fail(f"Submodule has local changes: {relative}; commit/review them and update its lock before building")
     return source
+
+
+def checked_guest():
+    source = ROOT / SOURCES["linux-guest"]["path"]
+    if source.is_symlink() or not (source / ".git").is_file():
+        fail(f"Guest worktree is not prepared: {source}; run prepare")
+    top = Path(run(["git", "-C", source, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
+    if top != source:
+        fail(f"Unexpected guest worktree: {source}")
+    # Share Linux history, but keep guest independent of the host gitlink.
+    host = ROOT / SOURCES["linux-host"]["path"]
+    common = lambda path: Path(run(["git", "-C", path, "rev-parse", "--path-format=absolute", "--git-common-dir"], capture=True).strip()).resolve()
+    if common(source) != common(host):
+        fail(f"Guest must be a worktree of {host}: {source}")
+    expected = SOURCES["linux-guest"]["revision"]
+    if run(["git", "-C", source, "rev-parse", "HEAD"], capture=True).strip() != expected:
+        fail(f"Guest revision mismatch: {source}; preserve local work and update the source lock")
+    if run(["git", "-C", source, "status", "--porcelain", "--untracked-files=all"], capture=True).strip():
+        fail(f"Guest has local changes: {source}; commit/review them and update its lock before building")
+    return source
+
+
+def prepare_guest():
+    target = ROOT / SOURCES["linux-guest"]["path"]
+    if target.exists() or target.is_symlink():
+        return checked_guest()
+    host = prepare_source("linux-host")
+    revision = SOURCES["linux-guest"]["revision"]
+    contains = subprocess.run(["git", "-C", str(host), "cat-file", "-e", revision + "^{commit}"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if contains.returncode:
+        run(["git", "-C", host, "fetch", "--depth=1", SOURCES["linux-guest"]["url"], revision])
+    run(["git", "-C", host, "worktree", "add", "--detach", target, revision])
+    return checked_guest()
 
 
 def local_repository(name):
@@ -223,6 +258,8 @@ def ram_header():
 
 
 def prepare_source(name):
+    if name == "linux-guest":
+        return prepare_guest()
     relative = SOURCES[name]["path"]
     source = ROOT / relative
     if not (source / ".git").exists():
@@ -235,7 +272,21 @@ def prepare_source(name):
         return original
     target = private_path(WORK / "src" / name)
     if target.exists():
-        return verify_source(name)
+        marker = WORK / "state" / (name + ".json")
+        if name == "kvmtool" and marker.is_file():
+            previous = json.loads(marker.read_text())
+            if previous.get("revision") != SOURCES[name]["revision"]:
+                top = Path(run(["git", "-C", target, "rev-parse", "--show-toplevel"], capture=True).strip()).resolve()
+                head = run(["git", "-C", target, "rev-parse", "HEAD"], capture=True).strip()
+                dirty = run(["git", "-C", target, "status", "--porcelain", "--untracked-files=all"], capture=True).strip()
+                if top != target or head != previous.get("revision") or dirty:
+                    fail(f"Old kvmtool source has unexpected changes; preserve and inspect: {target}")
+                archive = Path(tempfile.mkdtemp(prefix="archive-kvmtool-", dir=target.parent))
+                target.rename(archive / "source")
+                marker.unlink()
+                print(f"Previous kvmtool build source retained at: {archive / 'source'}")
+        if target.exists():
+            return verify_source(name)
     revision = SOURCES[name]["revision"]
     contains = subprocess.run(["git", "-C", str(original), "cat-file", "-e", revision + "^{commit}"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -297,6 +348,7 @@ def configure_linux(name, cross):
         run(config + ["--disable", symbol])
     for symbol in ("VIRTUALIZATION", "KVM"):
         run(config + ["--enable" if name == "linux-host" else "--disable", symbol])
+    run(config + ["--enable" if name == "linux-guest" else "--disable", "RISCV_PMP_VIRT_GUEST_TEST"])
     run(config + ["--set-str", "LOCALVERSION", "-pmpvirt-kvm-host" if name == "linux-host" else "-virt-kvm-guest"])
     run(config + ["--disable", "LOCALVERSION_AUTO"])
     run(config + ["--set-str", "INITRAMFS_SOURCE", ""])
@@ -312,6 +364,8 @@ def configure_linux(name, cross):
         expected.append("CONFIG_KVM=y")
     elif "CONFIG_KVM=y" in content.splitlines() or "CONFIG_KVM=m" in content.splitlines():
         fail("The ordinary guest must not enable KVM")
+    if name == "linux-guest":
+        expected.append("CONFIG_RISCV_PMP_VIRT_GUEST_TEST=y")
     for setting in expected:
         if setting not in content.splitlines():
             fail(f"Required {name} config missing: {setting}")
@@ -415,8 +469,8 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("\n::sysinit:/bin/echo VIRT-KVM GUEST BOOTED\n")
-        install(ROOT / "tests/pmp-virt/runtime/check-guest.sh", staging / "usr/bin/check-virt-guest", True)
-        install(ROOT / "tests/pmp-virt/regression/buildroot/guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
+        install(ROOT / "tests/pmp-virt/runtime/check-virt-guest.sh", staging / "usr/bin/check-virt-guest", True)
+        install(ROOT / "tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("::sysinit:/usr/bin/virt-guest-autorun\n")
         append_archive(base, staging, images / "guest-rootfs.cpio.gz")
@@ -425,10 +479,11 @@ def package_rootfs(base):
         install(ROOT / "conf/rootfs-overlay/etc/inittab", staging / "etc/inittab")
         install(WORK / "src/kvmtool/lkvm-static", staging / "usr/bin/lkvm", True)
         install(WORK / "out/pv-user-test", staging / "usr/bin/pv-user-test", True)
-        install(ROOT / "tests/pmp-virt/runtime/check-host.sh", staging / "usr/bin/check-virt-host", True)
+        install(ROOT / "tests/pmp-virt/runtime/check-virt-host.sh", staging / "usr/bin/check-virt-host", True)
+        install(ROOT / "tests/pmp-virt/runtime/check-virt-vs-hs.sh", staging / "usr/bin/check-virt-vs-hs", True)
         install(ROOT / "scripts/buildroot/run-virt-guest.sh", staging / "usr/bin/run-virt-guest", True)
         install(ROOT / "scripts/buildroot/run-virt-debian.sh", staging / "usr/bin/run-virt-debian", True)
-        install(ROOT / "tests/pmp-virt/regression/buildroot/run-host-suite.sh", staging / "usr/bin/test-virt-all", True)
+        install(ROOT / "tests/pmp-virt/regression/buildroot/test-virt-all.sh", staging / "usr/bin/test-virt-all", True)
         install(WORK / "out/linux-guest/arch/riscv/boot/Image", staging / "opt/guest/Image")
         install(images / "guest-rootfs.cpio.gz", staging / "opt/guest/rootfs.cpio.gz")
         append_archive(base, staging, images / "host-rootfs.cpio.gz")
@@ -443,7 +498,7 @@ def artifact_paths():
         "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
     )] + [ROOT / filename for filename in (
         "conf/pmp-virt/linux.config", "conf/pmp-virt/sources.json", "conf/rootfs-overlay/etc/inittab",
-        "tests/pmp-virt/runtime/user-exec.c", *SCRIPT_INPUTS)]
+        "tests/pmp-virt/runtime/pv-user-test.c", *SCRIPT_INPUTS)]
 
 
 def manifest(base=None, cross=None, compiler_version=None):
@@ -519,7 +574,7 @@ def build(jobs):
          "NO_VALGRIND=1", "NO_YAML=1", f"-j{jobs}", "libfdt"])
     lkvm = verify_source("kvmtool")
     run(["make", "-C", lkvm, "ARCH=riscv", f"CROSS_COMPILE={cross}", f"LIBFDT_DIR={dtc / 'libfdt'}", f"-j{jobs}", "lkvm-static"])
-    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", ROOT / "tests/pmp-virt/runtime/user-exec.c", "-o", WORK / "out/pv-user-test"])
+    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-static", ROOT / "tests/pmp-virt/runtime/pv-user-test.c", "-o", WORK / "out/pv-user-test"])
     package_rootfs(base)
     manifest(base, cross)
     verify()

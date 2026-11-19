@@ -41,7 +41,7 @@ class DebianUpdateChecks(unittest.TestCase):
         self.script.write_text(text)
 
     def package(self, role="guest"):
-        name = "debian-guest-tools.tar.gz" if role == "guest" else "dual-debian-tools.tar.gz"
+        name = "debian-guest-tools.tar.gz" if role == "guest" else "debian-host-tools.tar.gz"
         package = self.input / name
         body = b'echo installed >> "$INSTALL_LOG"\nexit "$INSTALL_EXIT"\n'
         with tarfile.open(package, "w:gz") as archive:

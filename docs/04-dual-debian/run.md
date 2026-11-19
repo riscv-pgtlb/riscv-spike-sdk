@@ -2,9 +2,17 @@
 
 ## 一条命令执行已有完整测试
 
-已有磁盘和测试工具时，在服务器执行 `make pmpvirt-test`，按提示输入外层 root 密码。
+已有磁盘和测试工具时，在服务器执行 
+
+```sh
+make pmpvirt-test
+```
+
+按提示输入外层 root 密码。
+
 入口先做逻辑与产物检查，再启动、登录、调用完整套件、关机并汇总证据，不重建磁盘。
-参数、日志及无人值守方式见 [统一测试说明](../03-pmp-virt-kvm/test-suite.md)。下面保留日常启动和手动测试步骤。
+
+> 参数、日志及无人值守方式见 [统一测试说明](../03-pmp-virt-kvm/test-suite.md)。下面保留日常启动和手动测试步骤。
 
 ## 启动外层
 
@@ -16,7 +24,9 @@ make run-virt-dual-debian
 ```
 
 默认使用 `images/debian/debian-host.raw` 和 `debian-guest.raw`。
+
 如需其他磁盘，启动和更新都必须指定同一组 `DEBIAN_HOST_DISK`、`DEBIAN_GUEST_DISK`。
+
 准备或更新正在运行时不要启动虚拟机。
 
 使用准备阶段设置的 root 密码登录外层，检查：

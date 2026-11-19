@@ -4,12 +4,12 @@ set -euo pipefail
 role=${1:-}
 shift || true
 case "$role" in
-    host) package=dual-debian-tools.tar.gz ;;
+    host) package=debian-host-tools.tar.gz ;;
     guest) package=debian-guest-tools.tar.gz ;;
     *) echo 'Expected host or guest' >&2; exit 2 ;;
 esac
 if [ "$#" -ne 2 ] || [ "$1" != --from-dir ]; then
-    echo "Usage: update-$([ "$role" = host ] && echo virt || echo guest)-tools --from-dir DIRECTORY" >&2
+    echo "Usage: update-$([ "$role" = host ] && echo host || echo guest)-tools --from-dir DIRECTORY" >&2
     exit 2
 fi
 

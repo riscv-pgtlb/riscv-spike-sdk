@@ -23,18 +23,19 @@ import uuid
 ROOT = Path(__file__).resolve().parents[3]
 GUARDS = ("DBCN READ", "PMU", "DBTR", "SSE", "MPXY", "HSM STATUS", "SUSP", "FWFT", "CPPC")
 RUNTIME_CASES = (
-    ("seal", "启动封存及 Linux 确认"),
-    ("hs_ram", "启动探针：HS RAM 执行，封存前允许、封存后拒绝"),
-    ("hs_text", "启动探针：text 可写别名，封存后写入拒绝"),
-    ("hs_rodata", "启动探针：rodata 可写别名，封存后写入拒绝"),
-    ("sbi_before", "启动检查：封存前 SBI guard 9/9"),
-    ("sbi_after", "启动检查：封存后 SBI guard 9/9"),
-    ("host_before", "guest 启动前：同页 U → HS → U 与 host 检查"),
-    ("guest", "guest 内核、内存和时间检查"),
+    ("seal", "PMP.Virt 策略封存与内核确认"),
+    ("hs_ram", "HS RAM 执行权限：封存前允许，封存后拒绝"),
+    ("hs_text", "内核 text 写保护：可写别名访问被拒绝"),
+    ("hs_rodata", "内核 rodata 写保护：可写别名访问被拒绝"),
+    ("sbi_before", "封存前 SBI 接口限制检查（9/9）"),
+    ("sbi_after", "封存后 SBI 接口限制检查（9/9）"),
+    ("host_before", "guest 启动前：host 检查与 HU–HS–HU 同页探针"),
+    ("vs_hs", "VS–HS–VS 同物理页执行权限对照"),
+    ("guest", "guest 内核、内存与时钟推进"),
     ("guest_shutdown", "guest 自动关机请求"),
-    ("guest_return", "guest 正常返回，套件确认内层结果"),
-    ("host_after", "guest 返回后：重新执行同页测试并复核启动结果"),
-    ("runtime", "完整套件 ALL PASS 与结果顺序"),
+    ("guest_return", "guest 正常退出并返回 host"),
+    ("host_after", "guest 返回后：host 检查与 HU–HS–HU 同页复测"),
+    ("runtime", "完整回归结果与事件顺序"),
 )
 HOST_PASS = "VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, /dev/kvm"
 USER_PASS = "PMP.Virt USER SUMMARY: PASS U-success / HS-access-fault / U-success"
@@ -48,7 +49,7 @@ def colored(text, status):
 
 
 def report(status, message, number=None):
-    prefix = (f"[TEST {number}]" if number is not None else "").ljust(9) + " "
+    prefix = (f"[TEST {number:02d}]" if number is not None else "").ljust(9) + " "
     print(f"{prefix}{colored(f'[{status:4}]', status)} {message}", flush=True)
 
 
@@ -82,6 +83,13 @@ def same_page(lines):
         r"PASS U execute after HS probe: value=42", re.escape(USER_PASS), re.escape(HOST_PASS)))
 
 
+def vs_hs_same_page(lines):
+    checker = ROOT / "tests/pmp-virt/runtime/check-virt-vs-hs.sh"
+    result = subprocess.run(["sh", str(checker)], input="\n".join(lines) + "\n",
+                            text=True, capture_output=True)
+    return result.returncode == 0
+
+
 def runtime_results(text, expected_versions=None):
     """Only real complete output lines count; shell echoes are not results."""
     lines = canonical_lines(text)
@@ -109,6 +117,7 @@ def runtime_results(text, expected_versions=None):
         outcomes["host_before"] = same_page(lines[:before])
     if before is not None and returned is not None and before < returned:
         guest = lines[before + 1:returned]
+        outcomes["vs_hs"] = vs_hs_same_page(guest)
         check = r"(?:check-virt-guest\[\d+\]: )?VIRT-REGRESSION GUEST PASS"
         shutdown = r"(?:echo\[\d+\]: )?VIRT-REGRESSION GUEST SHUTDOWN"
         outcomes["guest"] = ordered(guest, (check,))
@@ -130,6 +139,7 @@ def runtime_results(text, expected_versions=None):
         "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS")))
     if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic", text):
         outcomes["runtime"] = False
+        outcomes["vs_hs"] = False
     return outcomes
 
 
@@ -203,17 +213,18 @@ def failure_info(error, transcript="", cases=()):
                     actions=["查看 console.log 中具体的文件路径或 expected/installed 版本。",
                              "关闭两层后，使用同一组磁盘参数执行 make debian-update，再重新测试。"],
                     blocked="工具版本检查未通过，未完成此项")
-    elif "test-virt-debian-all" in transcript and re.search(r"not found|No such file or directory", transcript):
+    elif re.search(r"(?m)^[^\r\n]*test-virt-debian-all[^\r\n]*: (?:not found|No such file or directory|cannot open[^\r\n]*No such file)[^\r\n]*$", terminal_text(transcript)) and not re.search(r"Kernel panic|Oops|PMP\.Virt .*FAIL", transcript):
         info.update(code="HOST_SUITE_MISSING", stage="调用外层完整套件",
                     reason="外层无法找到或打开 test-virt-debian-all；可能尚未安装完整工具包。",
                     actions=["关闭两层后，用相同磁盘参数运行 make debian-update。",
                              "重新启动确认 /usr/local/bin/test-virt-debian-all 存在，再执行统一测试。"],
                     blocked="外层完整套件不可用，未完成此项")
-    elif "Protection failure" in reason or re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic", transcript):
+    elif "Protection failure" in reason or re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic|Oops", transcript):
         info.update(code="RUNTIME_FAILURE", stage="保护探针或内核运行",
                     reason="控制台出现保护失败或内核 panic，需要核对具体探针；不是普通登录失败。",
                     actions=["查看 console.log 中首个 FAIL/FATAL/panic 的原因、地址和异常码。",
-                             "核对本轮 manifest.json 与源码版本；不要只截取最后一行汇总。"])
+                             "核对本轮 manifest.json 与源码版本；不要只截取最后一行汇总。"],
+                    blocked="保护探针或内核运行失败，未取得此项完整结果")
     elif "Disk check failed" in reason or "disk" in reason.lower() and "separate" in reason:
         info.update(code="DISK_PREFLIGHT", stage="磁盘检查",
                     actions=["确认两块磁盘存在、相互独立且可读写。",
@@ -370,27 +381,25 @@ class Suite:
         self.system = system
         self.started = time.monotonic()
         self.cases = [{"id": key, "name": name, "status": "SKIP", "detail": "未执行"}
-                      for key, name in (("static", "现有逻辑与部署测试"), ("artifacts", "构建产物及 host/固件配对"),
-                                        ("environment", "运行环境检查"), *RUNTIME_CASES,
-                                        ("shutdown", "测试命令成功退出且 QEMU 正常结束"))]
+                      for key, name in (("static", "SDK 单元测试"), ("artifacts", "构建产物完整性与内核—固件配对"),
+                                        ("environment", "运行环境与磁盘可用性"), *RUNTIME_CASES,
+                                        ("shutdown", "测试命令与 QEMU 正常退出"))]
         for number, case in enumerate(self.cases, start=1):
             case["number"] = number
         self.error = None
         self.transcript = ""
         self.expected_tools = None
         self.reported = set()
-        self.announced = set()
 
     def report_case(self, case, status, message):
-        number = case["number"] if case["id"] not in self.announced else None
-        self.announced.add(case["id"])
+        number = None if status == "RUN" else case["number"]
         report(status, message, number)
 
     def mark(self, key, status, detail=""):
         case = next(item for item in self.cases if item["id"] == key)
         case.update(status=status, detail=detail)
         self.reported.add(key)
-        self.report_case(case, status, case['name'] + (f"：{detail}" if detail else ""))
+        self.report_case(case, status, case['name'] + (f"：{detail}" if detail and status != "PASS" else ""))
 
     def command(self, key, command, logfile, timeout=120, env=None):
         case = next(item for item in self.cases if item['id'] == key)
@@ -417,22 +426,28 @@ class Suite:
                  "error": self.error, "diagnostics": diagnostics, "cases": self.cases,
                  "expected_tools": self.expected_tools,
                  "elapsed_seconds": round(time.monotonic() - self.started, 2)}
+        counts = {status: sum(case["status"] == status for case in self.cases)
+                  for status in ("PASS", "FAIL", "SKIP")}
+        state["counts"] = {"total": len(self.cases), "passed": counts["PASS"],
+                           "failed": counts["FAIL"], "skipped": counts["SKIP"]}
         (self.folder / "result.json").write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
-        lines = [f"PMP.Virt suite: {state['status']}", f"System: {self.system}", ""]
-        lines.extend("{} [{}] {} {}".format(f"[TEST {case['number']}]".ljust(9),
-                                          case["status"], case["name"], case["detail"])
+        footer = [f"结果：{state['status']}（{counts['PASS']}/{len(self.cases)}）",
+                  f"耗时：{state['elapsed_seconds']:.2f} 秒",
+                  f"证据目录：{self.folder}"]
+        lines = []
+        lines.extend("{} [{}] {} {}".format(f"[TEST {case['number']:02d}]".ljust(9),
+                                          case["status"], case["name"], case["detail"] if case["status"] != "PASS" else "").rstrip()
                      for case in self.cases)
         if self.error:
             lines.append("Error: " + self.error)
         if diagnostics:
             lines += ["", "失败阶段：" + diagnostics["stage"], "原因：" + diagnostics["reason"]]
             lines += [f"建议 {index}：{action}" for index, action in enumerate(diagnostics["actions"], 1)]
+        lines += ["", *footer]
         (self.folder / "summary.txt").write_text("\n".join(lines) + "\n")
         files = sorted(p for p in self.folder.rglob("*") if p.is_file() and p.name != "SHA256SUMS")
         (self.folder / "SHA256SUMS").write_text("".join(
             f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(self.folder)}\n" for path in files))
-        status = "PASS" if passed else "FAIL"
-        print(f"\n{colored('PMPVIRT TEST ' + status, status)}; evidence: {self.folder}", flush=True)
         if diagnostics:
             print(f"          失败阶段：{diagnostics['stage']} [{diagnostics['code']}]", flush=True)
             print(f"          原因：{diagnostics['reason']}", flush=True)
@@ -444,6 +459,7 @@ class Suite:
         for case in self.cases:
             if case["status"] == "SKIP" and case["id"] not in self.reported:
                 self.report_case(case, "SKIP", f"{case['name']}：{case['detail']}")
+        print("\n" + "\n".join(footer), flush=True)
         return passed
 
 
@@ -512,7 +528,7 @@ def main():
         outcomes = runtime_results(transcript, expected_versions=suite.expected_tools)
         suite.transcript = transcript
         diagnostics = failure_info(error, transcript) if error else None
-        for key, _ in RUNTIME_CASES:
+        for key in outcomes:
             suite.mark(key, "PASS" if outcomes[key] else ("FAIL" if error is None else "SKIP"),
                        "" if outcomes[key] else (diagnostics["blocked"] if diagnostics else "缺少成功证据，查看 console.log"))
         suite.mark("shutdown", "PASS" if error is None else "FAIL", error or "")

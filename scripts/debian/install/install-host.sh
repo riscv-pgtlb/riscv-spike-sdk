@@ -1,4 +1,5 @@
 #!/bin/bash
+# 确认当前处于符合要求的 Debian host 环境，再调用 install-tools.sh 安装工具
 set -euo pipefail
 
 test "$(id -u)" -eq 0 || {

@@ -14,7 +14,7 @@ cd "$source_dir"
 test "$(id -u)" -eq 0
 test "$(uname -m)" = riscv64
 
-# 在修改系统前检查密码配置。
+# 1. 在修改系统前检查密码配置。
 test -r root-password.hash || {
     echo "Missing root-password.hash" >&2
     exit 1
@@ -29,23 +29,25 @@ case "$password_hash" in
 '*) echo "Invalid password hash" >&2; exit 1 ;;
 esac
 
+# 2. 校验材料并初始化系统
 sha256sum -c SHA256SUMS
 sh ./init-system.sh "$role"
 
+# 3. 按角色安装工具
 work_dir=$(mktemp -d /run/debian-provision.XXXXXX)
 
 case "$role" in
     host)
-        tar -xzf dual-debian-tools.tar.gz -C "$work_dir"
+        tar -xzf debian-host-tools.tar.gz -C "$work_dir"
         bash "$work_dir/scripts/debian/install/install-host.sh"
         ;;
     guest)
         tar -xzf debian-guest-tools.tar.gz -C "$work_dir"
-
-        sh "$work_dir/scripts/debian/install/install-guest.sh" --offline
+        sh "$work_dir/scripts/debian/install/install-guest.sh" --maintenance
         ;;
 esac
 
+# 设置 root 密码
 # chpasswd -e 接收密码哈希，不接收明文密码。
 printf 'root:%s\n' "$password_hash" | chpasswd -e
 unset password_hash

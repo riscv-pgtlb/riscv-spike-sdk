@@ -1,0 +1,135 @@
+{
+  "status": "PASS",
+  "system": "buildroot",
+  "error": null,
+  "diagnostics": null,
+  "cases": [
+    {
+      "id": "static",
+      "name": "SDK 单元测试",
+      "status": "PASS",
+      "detail": "static.log",
+      "number": 1
+    },
+    {
+      "id": "artifacts",
+      "name": "构建产物完整性与内核—固件配对",
+      "status": "PASS",
+      "detail": "verify.log",
+      "number": 2
+    },
+    {
+      "id": "environment",
+      "name": "运行环境与磁盘可用性",
+      "status": "PASS",
+      "detail": "复用现有 Buildroot 自动回归入口",
+      "number": 3
+    },
+    {
+      "id": "seal",
+      "name": "PMP.Virt 策略封存与内核确认",
+      "status": "PASS",
+      "detail": "",
+      "number": 4
+    },
+    {
+      "id": "hs_ram",
+      "name": "HS RAM 执行权限：封存前允许，封存后拒绝",
+      "status": "PASS",
+      "detail": "",
+      "number": 5
+    },
+    {
+      "id": "hs_text",
+      "name": "内核 text 写保护：可写别名访问被拒绝",
+      "status": "PASS",
+      "detail": "",
+      "number": 6
+    },
+    {
+      "id": "hs_rodata",
+      "name": "内核 rodata 写保护：可写别名访问被拒绝",
+      "status": "PASS",
+      "detail": "",
+      "number": 7
+    },
+    {
+      "id": "sbi_before",
+      "name": "封存前 SBI 接口限制检查（9/9）",
+      "status": "PASS",
+      "detail": "",
+      "number": 8
+    },
+    {
+      "id": "sbi_after",
+      "name": "封存后 SBI 接口限制检查（9/9）",
+      "status": "PASS",
+      "detail": "",
+      "number": 9
+    },
+    {
+      "id": "host_before",
+      "name": "guest 启动前：host 检查与 HU–HS–HU 同页探针",
+      "status": "PASS",
+      "detail": "",
+      "number": 10
+    },
+    {
+      "id": "vs_hs",
+      "name": "VS–HS–VS 同物理页执行权限对照",
+      "status": "PASS",
+      "detail": "",
+      "number": 11
+    },
+    {
+      "id": "guest",
+      "name": "guest 内核、内存与时钟推进",
+      "status": "PASS",
+      "detail": "",
+      "number": 12
+    },
+    {
+      "id": "guest_shutdown",
+      "name": "guest 自动关机请求",
+      "status": "PASS",
+      "detail": "",
+      "number": 13
+    },
+    {
+      "id": "guest_return",
+      "name": "guest 正常退出并返回 host",
+      "status": "PASS",
+      "detail": "",
+      "number": 14
+    },
+    {
+      "id": "host_after",
+      "name": "guest 返回后：host 检查与 HU–HS–HU 同页复测",
+      "status": "PASS",
+      "detail": "",
+      "number": 15
+    },
+    {
+      "id": "runtime",
+      "name": "完整回归结果与事件顺序",
+      "status": "PASS",
+      "detail": "",
+      "number": 16
+    },
+    {
+      "id": "shutdown",
+      "name": "测试命令与 QEMU 正常退出",
+      "status": "PASS",
+      "detail": "",
+      "number": 17
+    }
+  ],
+  "expected_tools": null,
+  "elapsed_seconds": 19.98,
+  "counts": {
+    "total": 17,
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0
+  }
+}

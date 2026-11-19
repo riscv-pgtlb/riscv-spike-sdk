@@ -16,7 +16,7 @@ class PackageLayoutChecks(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        for relative in ("scripts/debian/install", "scripts/debian/update", "scripts/debian/run",
+        for relative in ("scripts/debian/install", "scripts/debian/update", "scripts/debian/common", "scripts/debian/run",
                          "tests/pmp-virt/runtime", "tests/pmp-virt/regression/debian"):
             shutil.copytree(ROOT / relative, self.root / relative)
         for relative in ("build/virt-kvm/src/kvmtool/lkvm-static", "build/virt-kvm/out/pv-user-test",
@@ -39,8 +39,8 @@ class PackageLayoutChecks(unittest.TestCase):
                        env=self.env, check=True, capture_output=True)
 
     def install_package(self, role):
-        name = "dual-debian-tools.tar.gz" if role == "host" else "debian-guest-tools.tar.gz"
-        package = self.root / "build/debian-host-transfer" / name
+        name = "debian-host-tools.tar.gz" if role == "host" else "debian-guest-tools.tar.gz"
+        package = self.root / "build/debian-tools" / name
         unpacked = self.root / "unpacked"
         unpacked.mkdir()
         with tarfile.open(package) as archive:
@@ -68,7 +68,8 @@ class PackageLayoutChecks(unittest.TestCase):
         self.assertTrue((installed / "usr/local/libexec/virt-tools/update-tools").is_file())
         if role == "host":
             self.assertTrue((installed / "usr/local/bin/run-debian-guest").is_file())
-            self.assertTrue((installed / "usr/local/bin/update-virt-tools").is_file())
+            self.assertTrue((installed / "usr/local/bin/check-virt-vs-hs").is_file())
+            self.assertTrue((installed / "usr/local/bin/update-host-tools").is_file())
             self.assertTrue((installed / "usr/local/bin/test-virt-debian-all").is_file())
             self.assertTrue((installed / "opt/guest/Image").is_file())
         else:

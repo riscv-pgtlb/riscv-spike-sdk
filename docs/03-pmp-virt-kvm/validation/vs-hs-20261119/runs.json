@@ -1,0 +1,28 @@
+[
+  {
+    "system": "debian",
+    "run": "suite-20261119-182231-465495",
+    "sources": {
+      "linux-host": "f71c60d7b3e8ca338ac99463aaa70df744b37063",
+      "linux-guest": "40f2abdde96ec6d8ff225fc7b80a22237a47b2ec",
+      "opensbi": "0e1a39f96b50c09978aa190a830b713a51c014c2",
+      "qemu": "0ec20439ca845573db2a52e85aa34c0dca9c1731",
+      "dtc": "f99e3af0ecb67a9085478a9b8ddbcc25aa64931d",
+      "kvmtool": "3010d50f699b7f62aea63d49bbed2242959d23d3"
+    },
+    "console_sha256": "4c2e6dd8917665761f2f6ea631d97390798ca318b212a97d21c1d686034fc8f9"
+  },
+  {
+    "system": "buildroot",
+    "run": "suite-20261119-182504-321467",
+    "sources": {
+      "linux-host": "f71c60d7b3e8ca338ac99463aaa70df744b37063",
+      "linux-guest": "40f2abdde96ec6d8ff225fc7b80a22237a47b2ec",
+      "opensbi": "0e1a39f96b50c09978aa190a830b713a51c014c2",
+      "qemu": "0ec20439ca845573db2a52e85aa34c0dca9c1731",
+      "dtc": "f99e3af0ecb67a9085478a9b8ddbcc25aa64931d",
+      "kvmtool": "3010d50f699b7f62aea63d49bbed2242959d23d3"
+    },
+    "console_sha256": "78a67686c3d2b1c193f13de0324b00b6a622fc9b0f0e98966928e2489374ec23"
+  }
+]

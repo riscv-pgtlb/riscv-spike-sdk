@@ -427,7 +427,7 @@ debian-tools:
 	bash "$(topdir)/scripts/debian/install/pack-tools.sh"
 
 serve-debian-tools: debian-tools
-	python3 -m http.server 8000 --bind 127.0.0.1 --directory "$(topdir)/build/debian-host-transfer"
+	python3 -m http.server 8000 --bind 127.0.0.1 --directory "$(topdir)/build/debian-tools"
 
 # 从基础镜像创建并初始化独立的双 Debian 磁盘
 .PHONY: debian-prepare

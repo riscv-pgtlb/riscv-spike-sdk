@@ -8,6 +8,7 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("pmpvirt_suite_tests", ROOT / "tests/pmp-virt/regression/run-suite.py")
@@ -22,6 +23,14 @@ def same_page():
         "PASS U execute after HS probe: value=42", suite.USER_PASS, suite.HOST_PASS))
 
 
+VS_HS_EVIDENCE = (
+    "PMP.Virt VS BEFORE PASS: GPA=0000000081000000 result=42",
+    " Info: PMP.Virt VS/HS BEGIN: GPA=0x81000000 HPA=0x90001000 cause=1",
+    "PMP.Virt VS AFTER PASS: GPA=0000000081000000 result=42",
+    " Info: PMP.Virt VS/HS COMPLETE: GPA=0x81000000 HPA=0x90001000 guest_report=42",
+    "PMP.Virt VS-HS-VS SAME-PAGE PASS: GPA=0000000081000000",
+)
+
 def transcript():
     lines = ["PMP.Virt SEALED: text=[0x80202000,0x81000000)", "PMP.Virt seal acknowledged"]
     for name, cause in (("HS RAM execute", 1), ("text writable alias", 7), ("rodata writable alias", 7)):
@@ -31,13 +40,134 @@ def transcript():
         lines += [f"PMP.Virt SBI GUARD PASS {phase} {name} probe=0 error=-2 buffer=unchanged"
                   for name in suite.GUARDS]
     lines += [same_page(), "VIRT-REGRESSION HOST BEFORE PASS",
-              "VIRT-REGRESSION GUEST PASS", "VIRT-REGRESSION GUEST SHUTDOWN",
+              *VS_HS_EVIDENCE, "VIRT-REGRESSION GUEST PASS", "VIRT-REGRESSION GUEST SHUTDOWN",
               "VIRT-REGRESSION GUEST RETURNED", same_page(),
               "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS"]
     return "\n".join(lines) + "\n"
 
 
 class SuiteResultChecks(unittest.TestCase):
+    def test_success_output_has_padded_numbers_counts_duration_and_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            with patch.object(suite.time, "monotonic", return_value=10):
+                report = suite.Suite(folder, "debian")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output), patch.object(suite.time, "monotonic", return_value=22.5):
+                report.report_case(report.cases[0], "RUN", report.cases[0]["name"])
+                for case in report.cases:
+                    report.mark(case["id"], "PASS", "internal evidence.log")
+                self.assertTrue(report.finish())
+            text = output.getvalue()
+            self.assertIn("[TEST 01] [PASS] SDK 单元测试", text)
+            self.assertIn("[TEST 11] [PASS] VS–HS–VS 同物理页执行权限对照", text)
+            self.assertIn("[TEST 17] [PASS] 测试命令与 QEMU 正常退出", text)
+            self.assertNotIn("internal evidence.log", text)
+            footer = f"结果：PASS（17/17）\n耗时：12.50 秒\n证据目录：{folder}\n"
+            self.assertTrue(text.endswith(footer))
+            self.assertTrue((folder / "summary.txt").read_text().endswith(footer))
+            state = json.loads((folder / "result.json").read_text())
+            self.assertEqual(state["counts"], {"total": 17, "passed": 17, "failed": 0, "skipped": 0})
+            self.assertEqual(state["cases"][0]["detail"], "internal evidence.log")
+
+    def test_failure_footer_keeps_actual_counts_and_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = suite.Suite(Path(directory), "debian")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                report.mark("static", "FAIL", "unit failure")
+                report.error = "unit failure"
+                self.assertFalse(report.finish())
+            text = output.getvalue()
+            self.assertIn("失败阶段：", text)
+            self.assertIn("结果：FAIL（0/17）", text)
+            state = json.loads((Path(directory) / "result.json").read_text())
+            self.assertEqual(state["counts"]["failed"], 1)
+            self.assertEqual(state["counts"]["skipped"], 16)
+            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 17)
+
+    def test_vs_hs_raw_carriage_return_between_result_and_host_printk(self):
+        host = ("[   40.193687] PMP.Virt USER PTE: flags=247168eb required=b user=0 write=0\n"
+                "[   40.194100] PMP.Virt TEST PASS guest BEGIN same-page HS RX/U0 execute cause=1 pc=ff2000000008d000 tval=ff2000000008d000\n"
+                "[   40.194386] PMP.Virt GUEST HOST CHECK: phase=0 HPA=90001000 cause=1")
+        for stage in (0, 2, 4):
+            original = VS_HS_EVIDENCE[stage]
+            raw = transcript().replace(original, original + "\r" + host)
+            with self.subTest(stage=stage):
+                self.assertTrue(suite.runtime_results(raw)["vs_hs"])
+                bad = raw.replace("result=42", "result=0") if stage != 4 else raw.replace(
+                    VS_HS_EVIDENCE[4], VS_HS_EVIDENCE[4].replace("81000000", "82000000"))
+                self.assertFalse(suite.runtime_results(bad)["vs_hs"])
+
+    def test_vs_hs_known_host_printk_interleaving_is_reassembled(self):
+        original = VS_HS_EVIDENCE[0]
+        injected = (original[:original.index("result")] + "re"
+                    "[   35.146279] PMP.Virt USER PTE: flags=2491a0eb required=b user=0 write=0\n"
+                    "[   35.146563] PMP.Virt TEST PASS guest BEGIN same-page HS RX/U0 execute cause=1 pc=ff2000000008d000 tval=ff2000000008d000\n"
+                    "[   35.146833] PMP.Virt GUEST HOST CHECK: phase=0 HPA=90001000 cause=1\n"
+                    "sult=42")
+        text = transcript().replace(original, injected)
+        self.assertTrue(suite.runtime_results(text)["vs_hs"])
+        for bad in (injected.replace("sult=42", "sult=0"),
+                    injected.replace("sult=42", ""),
+                    injected.replace("PMP.Virt USER PTE:", "unknown output:"),
+                    injected.replace("cause=1 pc=", "cause=12 pc=")):
+            with self.subTest(bad=bad):
+                self.assertFalse(suite.runtime_results(transcript().replace(original, bad))["vs_hs"])
+
+    def test_vs_hs_missing_each_phase_is_rejected(self):
+        for line in VS_HS_EVIDENCE:
+            with self.subTest(line=line):
+                self.assertFalse(suite.runtime_results(transcript().replace(line, ""))["vs_hs"])
+
+    def test_vs_hs_wrong_addresses_and_results_are_rejected(self):
+        for old, new in (
+            (VS_HS_EVIDENCE[1], VS_HS_EVIDENCE[1].replace("81000000", "82000000")),
+            (VS_HS_EVIDENCE[2], VS_HS_EVIDENCE[2].replace("81000000", "82000000")),
+            (VS_HS_EVIDENCE[3], VS_HS_EVIDENCE[3].replace("90001000", "90002000")),
+            (VS_HS_EVIDENCE[4], VS_HS_EVIDENCE[4].replace("81000000", "82000000")),
+            ("cause=1", "cause=12"), ("guest_report=42", "guest_report=0"),
+        ):
+            with self.subTest(new=new):
+                self.assertFalse(suite.runtime_results(transcript().replace(old, new))["vs_hs"])
+
+    def test_vs_hs_duplicates_and_wrong_order_are_rejected(self):
+        text = transcript()
+        self.assertFalse(suite.runtime_results(text.replace(VS_HS_EVIDENCE[1],
+                         VS_HS_EVIDENCE[1] + "\n" + VS_HS_EVIDENCE[1]))["vs_hs"])
+        text = text.replace(VS_HS_EVIDENCE[0], "PLACEHOLDER").replace(
+            VS_HS_EVIDENCE[2], VS_HS_EVIDENCE[0]).replace("PLACEHOLDER", VS_HS_EVIDENCE[2])
+        self.assertFalse(suite.runtime_results(text)["vs_hs"])
+
+    def test_vs_hs_failure_and_unavailable_host_override_pass(self):
+        for failure in ("PMP.Virt VS-HS-VS FAIL: BEGIN error=-2 value=0",
+                        "Kernel panic - not syncing", "PMP.Virt TEST FAIL host probe"):
+            self.assertFalse(suite.runtime_results(transcript() + failure + "\n")["vs_hs"])
+        old = transcript()
+        for line in VS_HS_EVIDENCE:
+            old = old.replace(line, "")
+        self.assertFalse(suite.runtime_results(old)["vs_hs"])
+
+    def test_vs_hs_evidence_outside_guest_window_is_rejected(self):
+        text = transcript()
+        for line in VS_HS_EVIDENCE:
+            text = text.replace(line, "")
+        text = "\n".join(VS_HS_EVIDENCE) + "\n" + text
+        self.assertFalse(suite.runtime_results(text)["vs_hs"])
+
+    def test_vs_hs_must_finish_before_guest_success(self):
+        text = transcript().replace(VS_HS_EVIDENCE[4], "")
+        text = text.replace("VIRT-REGRESSION GUEST PASS",
+                            "VIRT-REGRESSION GUEST PASS\n" + VS_HS_EVIDENCE[4])
+        self.assertFalse(suite.runtime_results(text)["vs_hs"])
+
+    def test_vs_hs_follows_host_before_and_precedes_guest_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cases = suite.Suite(Path(directory), "debian").cases
+        self.assertEqual(len(cases), 17)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 17)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "vs_hs"), 11)
+
     def test_server_versions_are_required_on_both_host_checks_and_guest(self):
         versions = {"host": "a" * 64, "guest": "b" * 64}
         results = suite.runtime_results(transcript(), expected_versions=versions)
@@ -61,6 +191,15 @@ class SuiteResultChecks(unittest.TestCase):
     def test_interrupt_and_protection_failure_have_distinct_diagnostics(self):
         self.assertEqual(suite.failure_info("Interrupted")["code"], "INTERRUPTED")
         self.assertEqual(suite.failure_info("runtime failed", "PMP.Virt TEST FAIL")["code"], "RUNTIME_FAILURE")
+
+    def test_guest_panic_is_not_misclassified_by_unrelated_missing_file(self):
+        text = ("# test-virt-debian-all /dev/vdb\n"
+                "systemd: optional.conf: No such file or directory\n"
+                "PMP.Virt GUEST PROBE PAGE: GPA=0x82eeb000\n"
+                "Oops [#1]\nKernel panic - not syncing\n")
+        info = suite.failure_info("Protection failure or kernel panic", text)
+        self.assertEqual(info["code"], "RUNTIME_FAILURE")
+        self.assertNotIn("套件不可用", info["blocked"])
 
     def test_missing_suite_suggests_updating_tools(self):
         info = suite.failure_info("Runtime did not finish", "/usr/local/bin/test-virt-debian-all: No such file or directory")

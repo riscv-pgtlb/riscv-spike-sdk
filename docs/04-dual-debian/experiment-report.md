@@ -71,7 +71,7 @@ PMP.Virt 是本项目的实验扩展；机制、底层代码和异常含义见 [
 - 第一次处理 host 磁盘，第二次处理 guest 磁盘。
 - 当前待处理磁盘是 `/dev/vda`，只读 tar 传输盘是 `/dev/vdb`。
 - 使用 `init=/bin/sh debian_provision=1` 进入维护 shell，自动传入脚本并检查结果。
-- guest 磁盘由 `install-guest.sh --offline` 安装工具，不依赖运行中的 guest 内核或 systemd。
+- guest 磁盘由 `install-guest.sh --maintenance` 安装工具，不依赖运行中的 guest 内核或 systemd。
 
 **维护时使用 host 内核，不代表正式内层也使用 host 内核。** 正式内层仍由 lkvm 加载 guest Image。
 
@@ -123,7 +123,7 @@ Git 中旧路径显示删除、新路径显示未跟踪，包含目录迁移的�
 | [install/tool-manifest.py](../../scripts/debian/install/tool-manifest.py) | 唯一维护源文件、目标路径和权限映射；生成文件清单、输入校验值、确定性内容版本及配套 guest 版本。服务器回归复用其版本计算。 |
 | [install/install-tools.sh](../../scripts/debian/install/install-tools.sh) | 两层共用安装器：安装前核对所有输入，按清单复制文件、保存元数据并验证安装结果；DESTDIR 用于隔离安装验证。 |
 | [install/install-host.sh](../../scripts/debian/install/install-host.sh) | 检查外层 root、Debian 和 host 内核身份及依赖，然后调用共用安装器。 |
-| [install/install-guest.sh](../../scripts/debian/install/install-guest.sh) | 默认检查 guest 内核并重新加载 systemd；--offline 检查部署标记并离线启用服务；两种模式共用安装逻辑。 |
+| [install/install-guest.sh](../../scripts/debian/install/install-guest.sh) | 默认检查 guest 内核并重新加载 systemd；--maintenance 检查部署标记并离线启用服务；两种模式共用安装逻辑。 |
 
 #### run：正常启动
 
@@ -139,9 +139,9 @@ Git 中旧路径显示删除、新路径显示未跟踪，包含目录迁移的�
 | [update/update-dual-debian.py](../../scripts/debian/update/update-dual-debian.py) | 服务器检查两盘独立、读写权限和占用，重新打包，依次维护启动两盘更新；保存已完成层、工具版本和日志。 |
 | [update/update-system.sh](../../scripts/debian/update/update-system.sh) | 维护虚拟机内检查部署环境与工具包，调用 host 或 guest 离线安装器，不修改基础配置和密码。 |
 | [update/update-tools.sh](../../scripts/debian/update/update-tools.sh) | Debian 内两个本地更新命令的共用实现：检查身份、阻止并发、校验选定包并调用安装器。 |
-| [update/update-virt-tools.sh](../../scripts/debian/update/update-virt-tools.sh) | 外层 update-virt-tools 命令入口，转交共用更新程序。 |
+| [update/update-host-tools.sh](../../scripts/debian/update/update-host-tools.sh) | 外层 update-host-tools 命令入口，转交共用更新程序。 |
 | [update/update-guest-tools.sh](../../scripts/debian/update/update-guest-tools.sh) | 内层 update-guest-tools 命令入口，转交共用更新程序。 |
-| [update/check-virt-tools.sh](../../scripts/debian/update/check-virt-tools.sh) | 校验已安装元数据、文件存在、内容、模式与指定版本；guest 测试时读取内核参数中的预期版本。 |
+| [common/check-virt-tools.sh](../../scripts/debian/common/check-virt-tools.sh) | 校验已安装元数据、文件存在、内容、模式与指定版本；guest 测试时读取内核参数中的预期版本。 |
 
 #### common：共用维护逻辑
 
@@ -153,9 +153,9 @@ Git 中旧路径显示删除、新路径显示未跟踪，包含目录迁移的�
 
 | 文件 | 类型 | 功能 |
 | --- | --- | --- |
-| [tests/pmp-virt/runtime/check-host.sh](../../tests/pmp-virt/runtime/check-host.sh) | 迁移/复用 | 检查 host 身份、设备、封存和启动探针日志，再实际运行同页探针 |
-| [tests/pmp-virt/runtime/check-guest.sh](../../tests/pmp-virt/runtime/check-guest.sh) | 迁移/复用 | 检查 guest 内核、可用内存与时间推进；同时保留 Buildroot 兼容性 |
-| [tests/pmp-virt/runtime/user-exec.c](../../tests/pmp-virt/runtime/user-exec.c) | 迁移/复用 | 编译成 pv-user-test，执行同页 U → HS → U；内核侧探针仍在 Linux 子模块 |
+| [tests/pmp-virt/runtime/check-virt-host.sh](../../tests/pmp-virt/runtime/check-virt-host.sh) | 迁移/复用 | 检查 host 身份、设备、封存和启动探针日志，再实际运行同页探针 |
+| [tests/pmp-virt/runtime/check-virt-guest.sh](../../tests/pmp-virt/runtime/check-virt-guest.sh) | 迁移/复用 | 检查 guest 内核、可用内存与时间推进；同时保留 Buildroot 兼容性 |
+| [tests/pmp-virt/runtime/pv-user-test.c](../../tests/pmp-virt/runtime/pv-user-test.c) | 迁移/复用 | 编译成 pv-user-test，执行同页 U → HS → U；内核侧探针仍在 Linux 子模块 |
 | [tests/pmp-virt/regression/debian/test-virt-debian-all.sh](../../tests/pmp-virt/regression/debian/test-virt-debian-all.sh) | 新增/完善 | 串联版本核对、host 检查、lkvm 内层测试与关机、返回后的 host 复测；保存内层串口日志 |
 | [tests/pmp-virt/regression/debian/virt-guest-test.service](../../tests/pmp-virt/regression/debian/virt-guest-test.service) | 新增/完善 | 仅测试启动参数下执行文件版本及 guest 检查，成功后输出关机标记；失败也请求关机，但不假报成功 |
 | [tests/pmp-virt/regression/run-suite.py](../../tests/pmp-virt/regression/run-suite.py) | 新增 | 统一现有测试，自动登录 Debian 或复用 Buildroot 驱动，逐项核对证据、检查退出状态、归档并提供错误诊断 |
@@ -182,8 +182,8 @@ Git 中旧路径显示删除、新路径显示未跟踪，包含目录迁移的�
 | `scripts/buildroot/run-virt-guest.sh` | 原 `scripts/run-virt-guest.sh` | 迁移，保留受保护 Buildroot 外层启动内层的能力 |
 | `scripts/buildroot/run-virt-debian.sh` | 原 `scripts/run-virt-debian.sh` | 迁移，保留 Buildroot 外层加 Debian 内层 |
 | `tests/pmp-virt/regression/buildroot/run-regression.py` | 原测试根目录 | 调整根目录和导入路径，仍驱动原 Buildroot 回归，统一入口可复用 |
-| `tests/pmp-virt/regression/buildroot/run-host-suite.sh` | 原测试根目录 | 迁移，保留 host → guest → host 测试序列 |
-| `tests/pmp-virt/regression/buildroot/guest-autorun.sh` | 原测试根目录 | 迁移，保留 Buildroot guest 的测试模式检查及关机 |
+| `tests/pmp-virt/regression/buildroot/test-virt-all.sh` | 原测试根目录 | 迁移，保留 host → guest → host 测试序列 |
+| `tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh` | 原测试根目录 | 迁移，保留 Buildroot guest 的测试模式检查及关机 |
 | `scripts/legacy/pack-kvm-rootfs.sh` | 原 scripts 根目录 | 调整项目根目录和脚本路径，保留旧普通 KVM 打包 |
 | `scripts/legacy/run-guest.sh` | 原 scripts 根目录 | 迁移，普通 KVM 的 Buildroot guest 启动 |
 | `scripts/legacy/run-debian.sh` | 原 scripts 根目录 | 迁移，普通 KVM 的 Debian guest 启动 |
@@ -296,9 +296,9 @@ make debian-prepare DEBIAN_RECREATE=1
 make debian-tools
 ```
 
-只生成工具安装材料，不更新磁盘。输出在 `build/debian-host-transfer/`：
+只生成工具安装材料，不更新磁盘。输出在 `build/debian-tools/`：
 
-- `dual-debian-tools.tar.gz`：外层完整工具包。
+- `debian-host-tools.tar.gz`：外层完整工具包。
 - `debian-guest-tools.tar.gz`：内层小包。
 - `HOST-VERSION`、`GUEST-VERSION`：两层内容版本。
 - `SHA256SUMS`：上述包和版本文件的校验值。
@@ -318,7 +318,7 @@ make debian-update
 | 命令 | 工作 |
 | --- | --- |
 | `make serve-debian-tools` | 先打包，再在服务器 `127.0.0.1:8000` 提供下载服务；不是自动更新必需条件 |
-| `update-virt-tools --from-dir DIRECTORY` | 在外层对本地目录中的外层包做校验并更新；更新前停止内层 |
+| `update-host-tools --from-dir DIRECTORY` | 在外层对本地目录中的外层包做校验并更新；更新前停止内层 |
 | `update-guest-tools --from-dir DIRECTORY` | 在内层对本地目录中的内层包做校验并更新 |
 
 本地更新目录需同时包含对应压缩包及同批次 `SHA256SUMS`。这两个命令当前不负责 URL 下载。

@@ -64,9 +64,9 @@ def update(host, guest):
             stage = work / "setup"
             stage.mkdir()
             shutil.copyfile(ROOT / "scripts/debian/update/update-system.sh", stage / "update-system.sh")
-            for name in ("dual-debian-tools.tar.gz", "debian-guest-tools.tar.gz", "SHA256SUMS",
+            for name in ("debian-host-tools.tar.gz", "debian-guest-tools.tar.gz", "SHA256SUMS",
                          "HOST-VERSION", "GUEST-VERSION"):
-                shutil.copyfile(ROOT / "build/debian-host-transfer" / name, stage / name)
+                shutil.copyfile(ROOT / "build/debian-tools" / name, stage / name)
             state["tools_versions"] = {role: (stage / f"{role.upper()}-VERSION").read_text().strip()
                                        for role in ("host", "guest")}
             save()

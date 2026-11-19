@@ -5,5 +5,5 @@
 | 文件或目录 | 用途 |
 | --- | --- |
 | [run-regression.py](run-regression.py) | 服务器驱动 QEMU 控制台，检查结果顺序并归档证据。 |
-| [run-host-suite.sh](run-host-suite.sh) | 外层先检查保护，启动内层自动测试，返回后再次检查保护。 |
-| [guest-autorun.sh](guest-autorun.sh) | 内层仅在 virt_regression=1 时执行检查并关机。 |
+| [test-virt-all.sh](test-virt-all.sh) | 外层先检查保护，启动内层自动测试，返回后再次检查保护。 |
+| [virt-guest-autorun.sh](virt-guest-autorun.sh) | 内层仅在 virt_regression=1 时执行检查并关机。 |

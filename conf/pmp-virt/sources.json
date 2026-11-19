@@ -3,12 +3,12 @@
   "sources": {
     "linux-host": {
       "path": "repo/linux",
-      "revision": "ab598939034057e7fdc2a4beb483a10ef4c67077",
+      "revision": "f71c60d7b3e8ca338ac99463aaa70df744b37063",
       "url": "https://github.com/riscv-pgtlb/linux.git"
     },
     "linux-guest": {
-      "path": "repo/linux",
-      "revision": "449d48b1b99fdaa076166e200132705ac2bee711",
+      "path": "repo/linux-guest",
+      "revision": "40f2abdde96ec6d8ff225fc7b80a22237a47b2ec",
       "url": "https://github.com/riscv-pgtlb/linux.git"
     },
     "opensbi": {
@@ -28,8 +28,8 @@
     },
     "kvmtool": {
       "path": "repo/kvmtool",
-      "revision": "eb915c763e4b95dd4a9d32763fd449459742e053",
-      "url": "https://github.com/kvmtool/kvmtool.git"
+      "revision": "3010d50f699b7f62aea63d49bbed2242959d23d3",
+      "url": "https://github.com/riscv-pgtlb/kvmtool.git"
     }
   }
 }

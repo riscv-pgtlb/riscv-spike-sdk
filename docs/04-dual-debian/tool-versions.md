@@ -1,8 +1,8 @@
 # 安装后工具版本校验
 
-构建产物校验通过，不代表 Debian 磁盘中的工具已经更新。现在每层安装器都会保存文件清单与内容版本，
-`make pmpvirt-test` 将两层的实际文件与服务器当前源文件和构建产物对应起来。
-这项校验不读取整盘摘要，也不重设账号或系统配置。
+构建产物校验通过，不代表 Debian 磁盘中的工具已经更新。现在每层安装器都会保存文件清单与内容版本，`make pmpvirt-test` 将两层的实际文件与服务器当前源文件和构建产物对应起来。
+
+> 这项校验不读取整盘摘要，也不重设账号或系统配置。
 
 ## 使用
 
@@ -29,8 +29,9 @@ check-virt-tools
 ## 清单和版本如何生成
 
 `scripts/debian/install/tool-manifest.py` 是文件列表的唯一来源，定义 SHA-256、安装模式、包内路径和安装目标。
-外层覆盖 lkvm、pv-user-test、guest Image、保护检查、启动/回归/更新脚本和校验器；
-内层覆盖 guest 检查、测试服务、更新脚本和校验器。
+
+- 外层覆盖 lkvm、pv-user-test、guest Image、保护检查、启动/回归/更新脚本和校验器；
+- 内层覆盖 guest 检查、测试服务、更新脚本和校验器。
 
 每个包包含 `metadata/host/` 或 `metadata/guest/`：
 
@@ -43,12 +44,15 @@ check-virt-tools
 | `EXPECTED-GUEST-VERSION` | 仅外层包有，记录配套内层工具版本，并作为受检查文件安装 |
 
 打包输出目录还会有 `HOST-VERSION`、`GUEST-VERSION`；顶层 `SHA256SUMS` 覆盖两个压缩包和这两个版本文件。
+
 guest 工具变化会更新 guest 版本，也会通过配套版本使 host 版本变化。
 
 ## 安装和运行检查
 
-安装前检查所有输入内容，源文件损坏时不开始复制。安装后清单保存到 `/var/lib/virt-tools/`，
-`check-virt-tools` 校验元数据一致性、目标文件存在且非符号链接、实际内容和安装权限。
+安装前检查所有输入内容，源文件损坏时不开始复制。
+
+安装后清单保存到 `/var/lib/virt-tools/`,`check-virt-tools` 校验元数据一致性、目标文件存在且非符号链接、实际内容和安装权限。
+
 安装失败不自动回滚；应根据失败日志修复后重新更新。
 
 完整双 Debian 回归中：

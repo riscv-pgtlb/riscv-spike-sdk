@@ -4,14 +4,18 @@ set -eu
 extra=''
 case "${1:-}" in
     '') ;;
-    --regression) extra=' virt_regression=1' ;;
+    --regression) extra=' virt_regression=1 pmpvirt_guest_test=1' ;;
     *) echo 'Usage: run-virt-guest [--regression]' >&2; exit 2 ;;
 esac
+set --
+if [ -n "$extra" ]; then
+    set -- --pmp-virt-test
+fi
 /usr/bin/check-virt-host
 for input in /usr/bin/lkvm /opt/guest/Image /opt/guest/rootfs.cpio.gz; do
     test -r "$input" || { echo "Missing guest input: $input" >&2; exit 1; }
 done
-exec /usr/bin/lkvm run \
+exec /usr/bin/lkvm run "$@" \
     --name virt-kvm-b1 \
     -k /opt/guest/Image \
     -i /opt/guest/rootfs.cpio.gz \

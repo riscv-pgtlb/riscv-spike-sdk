@@ -1,11 +1,12 @@
 #!/bin/sh
+# 支持两种模式：在正常运行的 guest 中安装，或在初始化维护环境中安装
 set -eu
 
 mode=live
 case "$#:$*" in
     0:) ;;
-    1:--offline) mode=offline ;;
-    *) echo "Usage: $0 [--offline]" >&2; exit 2 ;;
+    1:--maintenance) mode=maintenance ;;
+    *) echo "Usage: $0 [--maintenance]" >&2; exit 2 ;;
 esac
 
 test "$(id -u)" -eq 0 || {
@@ -24,9 +25,9 @@ if [ "$mode" = live ]; then
         *) echo 'Debian guest kernel required' >&2; exit 1 ;;
     esac
 else
-    # 离线模式仅供带显式启动标记的初始化虚拟机使用。
+    # 维护模式仅供带显式启动标记的初始化虚拟机使用。
     grep -Eq '(^|[[:space:]])debian_provision=1([[:space:]]|$)' /proc/cmdline || {
-        echo 'Offline installation requires debian_provision=1' >&2
+        echo 'Maintenance installation requires debian_provision=1' >&2
         exit 1
     }
 fi

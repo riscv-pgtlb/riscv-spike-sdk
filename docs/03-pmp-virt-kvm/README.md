@@ -9,6 +9,8 @@
 | 文件或目录 | 用途 |
 | --- | --- |
 | 本 README | 组件构建、Buildroot 回归入口与验证边界 |
+| [report/](report/README.md) | 按 QEMU、OpenSBI、Linux 和 SDK 分开的实现与文件改动报告 |
+| [vs-hs-sdk-integration.md](vs-hs-sdk-integration.md) | VS–HS–VS 的五步 SDK 集成文件清单、验证与待办 |
 | [test-suite.md](test-suite.md) | 一条 make 命令集成已有检查，选择双 Debian 或 Buildroot，逐项汇总并归档 |
 | [pmp-virt-explained.md](pmp-virt-explained.md) | PMP.Virt 原理、QEMU/OpenSBI/Linux 改动、运行步骤和测试调用链 |
 | [validation/](validation/README.md) | 历史 B1 验证材料导航及当前缺失说明 |
@@ -59,3 +61,11 @@ Buildroot 外层加 Debian 内层的入口为 `make run-virt-debian-host`，外�
 HS 6/6 与 SBI guard 18/18 来自 host 启动检查，guest 返回后实际重新执行的是同页 U → HS → U 测试。
 没有据此证明 G-stage.Virt、VS/VU 权限配对、多核、压力测试或完整服务防绕过审计。
 本次目录整理没有重新执行虚拟机回归。
+
+## Linux 开发目录
+
+host 源码在 `repo/linux/`，guest 源码在 `repo/linux-guest/`。guest 是同一 Linux 仓库的 worktree，SDK 不把它注册为第二个子模块；`make virt-prepare` 在目录缺失时按 guest 版本锁创建 detached worktree，已有目录则只检查，不切换分支或覆盖修改。
+
+两边的 HEAD 必须分别匹配 `conf/pmp-virt/sources.json`，且源码目录必须干净；开发完成后先提交并更新版本锁。guest 不要求匹配 host 子模块指针。编译输出仍在 `build/virt-kvm/out/linux-host/`、`build/virt-kvm/out/linux-guest/`。
+
+旧 `build/virt-kvm/src/linux-guest/` 已停用。此路径迁移后，旧产物清单可能需要重新生成；源码检查通过不代表原有产物已经重新构建或通过运行验证。

@@ -24,7 +24,7 @@ Buildroot 的 host/guest initramfs 仍由构建生成，但双 Debian 正常启�
 | `images/debian/debian-guest.raw` | `/dev/vdb`；交给内层后成为内层 `/dev/vda` | 内层系统盘 |
 | `build/virt-kvm/out/linux-host/arch/riscv/boot/Image` | 由服务器 QEMU 加载 | 外层受保护内核 |
 | `build/virt-kvm/out/linux-guest/arch/riscv/boot/Image` | 安装为外层 `/opt/guest/Image`，由 lkvm 加载 | 内层普通内核 |
-| `build/debian-host-transfer/*.tar.gz` | 安装时解包 | 工具包，不是系统盘 |
+| `build/debian-tools/*.tar.gz` | 安装时解包 | 工具包，不是系统盘 |
 
 guest 运行时，外层不能挂载其磁盘或分区，也不能把自己的根磁盘交给 lkvm。
 通过 `uname -r` 判断所在层：外层包含 `pmpvirt-kvm-host`，内层包含 `virt-kvm-guest`。
@@ -55,7 +55,7 @@ make debian-prepare
    │  ├─ 维护启动 host → provision-system.sh host
    │  │  └─ init-system.sh host → install-host.sh → 设置密码
    │  └─ 维护启动 guest → provision-system.sh guest
-   │     └─ init-system.sh guest → install-guest.sh --offline → 设置密码
+   │     └─ init-system.sh guest → install-guest.sh --maintenance → 设置密码
    └─ 两层均成功 → 备份旧盘 → 发布到正式固定路径
 
 make debian-update
@@ -74,7 +74,7 @@ make debian-update
 ## 工具包与更新命令
 
 `make debian-tools` 生成外层完整包、内层小包和 `SHA256SUMS`。
-新安装器同时安装 `run-debian-guest`（外层）以及对应的 `update-virt-tools`、`update-guest-tools`。
+新安装器同时安装 `run-debian-guest`（外层）以及对应的 `update-host-tools`、`update-guest-tools`。
 两种 Debian 内更新命令支持 `--from-dir DIRECTORY`，目录中需包含对应工具包和同批次校验清单。
 服务器 `make debian-update` 自动传入工具包，不依赖这两个命令预先安装，也不需要下载服务。
 `make serve-debian-tools` 是可选的手动传输辅助，不是自动更新的前置条件。
