@@ -30,7 +30,7 @@ SDK 表格按功能引入和本次重命名分类，不把已存在功能都说�
 
 ## 版本基准
 
-下表保留初稿的旧基线，当前集成提交以 [sources.json](../../../conf/pmp-virt/sources.json) 为准；新的 host/guest/kvmtool 版本及第 11 项见 [SDK 集成记录](../vs-hs-sdk-integration.md)：
+下表保留初稿的旧基线，当前集成提交以 [sources.json](../../../conf/virt/sources.json) 为准；新的 host/guest/kvmtool 版本及第 11 项见 [SDK 集成记录](../vs-hs-sdk-integration.md)：
 
 | 组件 | 锁定提交 |
 | --- | --- |

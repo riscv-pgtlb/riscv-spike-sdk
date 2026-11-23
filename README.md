@@ -30,7 +30,7 @@ PMP.Virt 是本项目在模拟器中实现的实验扩展，不代表任意真�
 以下 `make` 命令均在**服务器项目根目录**执行。当前流程需要：
 
 - Linux 服务器及构建依赖，可用的 RISC-V 交叉工具链。
-- `conf/pmp-virt/sources.json` 锁定的组件源码，以及可用的基础 Buildroot rootfs。
+- `conf/virt/sources.json` 锁定的组件源码，以及可用的基础 Buildroot rootfs。
 - Debian riscv64 基础镜像 `images/debian/debian-13-nocloud-riscv64.qcow2` 和同批次 `SHA512SUMS`。
 - Python 3、qemu-img、openssl、tar、cpio、flock、校验工具及相关系统依赖。
 
@@ -170,7 +170,7 @@ make pmpvirt-test   DEBIAN_HOST_DISK=/path/to/debian-host.raw   DEBIAN_GUEST_DIS
 | 目录 | 内容 |
 | --- | --- |
 | `repo/` | 固定版本的组件子模块源码 |
-| `conf/pmp-virt/` | 版本锁与受保护系统配置 |
+| `conf/virt/` | 版本锁与受保护系统配置 |
 | [scripts/](scripts/README.md) | 按构建、准备、安装、启动、更新等功能组织的脚本 |
 | [tests/](tests/README.md) | 单元测试、运行时检查和完整回归 |
 | [docs/](docs/README.md) | 基础启动、普通 KVM、PMP.Virt、双 Debian 四阶段文档 |

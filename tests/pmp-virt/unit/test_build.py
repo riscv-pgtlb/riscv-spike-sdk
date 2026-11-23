@@ -48,7 +48,7 @@ class BuildChecks(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name).resolve()
         self.context = patch.multiple(build, ROOT=self.root, WORK=self.root / "build/virt-kvm",
-                                      SOURCE_LOCK=self.root / "conf/pmp-virt/sources.json")
+                                      SOURCE_LOCK=self.root / "conf/virt/sources.json")
         self.context.start()
         self.image = self.root / "Image"
         header = bytearray(64)
@@ -280,7 +280,7 @@ class BuildChecks(unittest.TestCase):
 
     def test_guest_config_requires_probe_but_not_kvm(self):
         source = self.root / "repo/linux-guest"
-        config = self.root / "conf/pmp-virt/linux.config"
+        config = self.root / "conf/virt/linux.config"
         config.parent.mkdir(parents=True)
         required = ("BLK_DEV_INITRD", "DEVTMPFS", "SERIAL_8250_CONSOLE", "VIRTIO_MMIO",
                     "STRICT_KERNEL_RWX", "VIRTIO_BLK", "VIRTIO_NET", "EXT4_FS", "NET", "INET")

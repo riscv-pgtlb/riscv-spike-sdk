@@ -16,7 +16,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 WORK = ROOT / "build" / "virt-kvm"
 SDK = Path(os.environ.get("SOURCE_SDK", str(ROOT))).resolve()
-SOURCE_LOCK = ROOT / "conf/pmp-virt/sources.json"
+SOURCE_LOCK = ROOT / "conf/virt/sources.json"
 RAM_BASE = 0x80000000
 RAM_SIZE = 2048 * 1024 * 1024
 LOAD_ADDRESS = 0x80200000
@@ -25,7 +25,10 @@ DIRECT = {"linux-host", "linux-guest", "opensbi", "qemu"}
 SCRIPT_INPUTS = ("scripts/build/virt-kvm.py", "scripts/buildroot/run-virt-guest.sh",
                  "scripts/buildroot/run-virt-debian.sh", "tests/pmp-virt/runtime/check-virt-host.sh",
                  "tests/pmp-virt/runtime/check-virt-guest.sh", "tests/pmp-virt/runtime/check-virt-vs-hs.sh", "tests/pmp-virt/regression/buildroot/test-virt-all.sh",
-                 "tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh")
+                 "tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh",
+                 "repo/qemu/tests/tcg/riscv64/stage2-virt.S",
+                 "tests/G-stage-virt/check-stage2-virt-qemu.sh",
+                 "tests/run-suite.py")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
 
@@ -70,7 +73,7 @@ def verify_inputs():
     state = json.loads(SOURCE_LOCK.read_text())
     if state.get("schema") != 1 or state.get("sources") != SOURCES:
         fail("Source lock changed during this process; restart after reviewing it")
-    for filename in ("conf/pmp-virt/linux.config", "tests/pmp-virt/runtime/pv-user-test.c",
+    for filename in ("conf/virt/linux.config", "tests/pmp-virt/runtime/pv-user-test.c",
                      "tests/pmp-virt/runtime/syscall-api.c", "tests/pmp-virt/runtime/syscall-attack.c",
                      *SCRIPT_INPUTS):
         if not (ROOT / filename).is_file():
@@ -344,7 +347,7 @@ def configure_linux(name, cross):
     source = verify_source(name)
     output = private_path(WORK / "out" / name)
     output.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "conf/pmp-virt/linux.config", output / ".config")
+    shutil.copyfile(ROOT / "conf/virt/linux.config", output / ".config")
     config = [source / "scripts/config", "--file", output / ".config"]
     for symbol in DISABLED:
         run(config + ["--disable", symbol])
@@ -504,7 +507,7 @@ def artifact_paths():
         "out/pv-syscall-api", "out/pv-syscall-attack", "src/kvmtool/lkvm-static",
         "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
     )] + [ROOT / filename for filename in (
-        "conf/pmp-virt/linux.config", "conf/pmp-virt/sources.json", "conf/rootfs-overlay/etc/inittab",
+        "conf/virt/linux.config", "conf/virt/sources.json", "conf/rootfs-overlay/etc/inittab",
         "tests/pmp-virt/runtime/pv-user-test.c", "tests/pmp-virt/runtime/syscall-api.c",
         "tests/pmp-virt/runtime/syscall-attack.c", *SCRIPT_INPUTS)]
 

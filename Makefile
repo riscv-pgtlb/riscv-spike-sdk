@@ -401,23 +401,20 @@ virt-verify:
 	$(VIRT_PYTHON) "$(VIRT_SCRIPT)" verify
 virt-test-static:
 	$(VIRT_PYTHON) -B -m unittest discover -s tests/pmp-virt/unit -p 'test_*.py' -v
-virt-test:
-	$(VIRT_PYTHON) -u tests/pmp-virt/regression/buildroot/run-regression.py
+	sh "$(topdir)/tests/G-stage-virt/check-stage2-virt-qemu.sh"
 
-# 统一现有测试；默认双 Debian，PMPVIRT_SYSTEM=buildroot 可选择原回归。
-PMPVIRT_SYSTEM ?= debian
-PMPVIRT_TIMEOUT ?= 600
-PMPVIRT_PASSWORD_FILE ?=
-.PHONY: pmpvirt-test
-pmpvirt-test:
-	PMPVIRT_PASSWORD_FILE="$(PMPVIRT_PASSWORD_FILE)" \
+# Virt 总汇总测试；包含 PMP.Virt 与 Stage2Virt，默认双 Debian。
+VIRT_SYSTEM ?= debian
+VIRT_TIMEOUT ?= 600
+VIRT_PASSWORD_FILE ?=
+virt-test:
+	VIRT_PASSWORD_FILE="$(VIRT_PASSWORD_FILE)" \
 		$(VIRT_PYTHON) -B -u \
-		"$(topdir)/tests/pmp-virt/regression/run-suite.py" \
-		--system "$(PMPVIRT_SYSTEM)" \
-		--timeout "$(PMPVIRT_TIMEOUT)" \
+		"$(topdir)/tests/run-suite.py" \
+		--system "$(VIRT_SYSTEM)" \
+		--timeout "$(VIRT_TIMEOUT)" \
 		--host-disk "$(DEBIAN_HOST_DISK)" \
 		--guest-disk "$(DEBIAN_GUEST_DISK)"
-
 
 # ------------------- 双层 debian ----------
 # 生成和传输安装包

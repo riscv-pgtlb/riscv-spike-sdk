@@ -1,6 +1,6 @@
 # PMP.Virt 测试
 
-统一入口：`make pmpvirt-test`，默认双 Debian；`make pmpvirt-test PMPVIRT_SYSTEM=buildroot` 使用原 Buildroot 回归。
+Virt 总汇总入口：`make virt-test`，内部同时执行 PMP.Virt 与 Stage2Virt；默认使用双 Debian。
 逐项显示结果并保存证据，使用方法见 [统一测试说明](../../docs/03-pmp-virt-kvm/test-suite.md)。
 
 make virt-test-static 执行 unit/；

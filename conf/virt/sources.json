@@ -18,7 +18,7 @@
     },
     "qemu": {
       "path": "repo/qemu",
-      "revision": "0ec20439ca845573db2a52e85aa34c0dca9c1731",
+      "revision": "2064868ef0f0c53ba658c93c390c9ce11c9b1ef3",
       "url": "https://github.com/riscv-pgtlb/qemu.git"
     },
     "dtc": {

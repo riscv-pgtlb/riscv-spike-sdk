@@ -20,7 +20,7 @@ import threading
 import time
 import uuid
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[1]
 GUARDS = ("DBCN READ", "PMU", "DBTR", "SSE", "MPXY", "HSM STATUS", "SUSP", "FWFT", "CPPC")
 RUNTIME_CASES = (
     ("seal", "PMP.Virt 策略封存与内核确认"),
@@ -194,7 +194,7 @@ def read_password(filename):
             password = stream.read().removesuffix("\n")
     else:
         if not sys.stdin.isatty():
-            raise RuntimeError("Debian login needs a terminal or PMPVIRT_PASSWORD_FILE pointing to a chmod-600 file")
+            raise RuntimeError("Debian login needs a terminal or VIRT_PASSWORD_FILE pointing to a chmod-600 file")
         password = getpass.getpass("外层 Debian root 密码（不保存）：")
     if not password or any(char in password for char in "\r\n\x00"):
         raise RuntimeError("Password must be a nonempty single line")
@@ -218,13 +218,13 @@ def failure_info(error, transcript="", cases=()):
     elif reason == "Interrupted":
         info.update(code="INTERRUPTED", stage="运行被中断",
                     reason="本次执行被中断，尚未完成的测试没有结果，不代表保护检查失败。",
-                    actions=["重新执行 make pmpvirt-test；等待进度提示或指定的超时时间。",
+                    actions=["重新执行 make virt-test；等待进度提示或指定的超时时间。",
                              "若再次停滞，根据 console.log 最后一条输出定位阶段。"],
                     blocked="运行被中断，此项没有完整结果")
     elif "timed out" in reason or "timeout" in reason.lower():
         info.update(code="TIMEOUT", stage="运行超时",
                     actions=["查看 console.log 末尾，区分仍在启动、等待登录或 guest 未退出。",
-                             "确认不是命令缺失或登录失败后，再按需要提高 PMPVIRT_TIMEOUT。"],
+                             "确认不是命令缺失或登录失败后，再按需要提高 VIRT_TIMEOUT。"],
                     blocked="运行超时，此项没有完整结果")
     elif re.search(r"VIRT TOOLS .*FAIL|VIRT TOOLS VERSION MISMATCH|check-virt-tools:.*(?:not found|No such file)", transcript):
         info.update(code="TOOLS_MISMATCH", stage="已安装工具版本检查",
@@ -400,7 +400,9 @@ class Suite:
         self.system = system
         self.started = time.monotonic()
         self.cases = [{"id": key, "name": name, "status": "SKIP", "detail": "未执行"}
-                      for key, name in (("static", "SDK 单元测试"), ("artifacts", "构建产物完整性与内核—固件配对"),
+                      for key, name in (("static", "SDK 单元测试"),
+                                        ("stage2_virt", "QEMU Stage2Virt语义测试"),
+                                        ("artifacts", "构建产物完整性与内核—固件配对"),
                                         ("environment", "运行环境与磁盘可用性"), *RUNTIME_CASES,
                                         ("shutdown", "测试命令与 QEMU 正常退出"))]
         for number, case in enumerate(self.cases, start=1):
@@ -508,10 +510,13 @@ def main():
         phase = "static"
         suite.command("static", [sys.executable, "-B", "-m", "unittest", "discover", "-s",
                                  "tests/pmp-virt/unit", "-p", "test_*.py", "-v"], "static.log")
+        phase = "stage2_virt"
+        suite.command("stage2_virt", ["sh", str(ROOT / "tests/G-stage-virt/check-stage2-virt-qemu.sh")],
+                      "stage2-virt.log", timeout=120)
         phase = "artifacts"
         suite.command("artifacts", [sys.executable, "-B", "scripts/build/virt-kvm.py", "verify"], "verify.log")
         shutil.copyfile(ROOT / "build/virt-kvm/manifest.json", folder / "manifest.json")
-        shutil.copyfile(ROOT / "conf/pmp-virt/sources.json", folder / "sources.json")
+        shutil.copyfile(ROOT / "conf/virt/sources.json", folder / "sources.json")
         phase = "environment"
         env = dict(os.environ)
         for name in ("VIRT_HOST_DISK", "VIRT_DEBIAN_DISK"):
@@ -529,7 +534,7 @@ def main():
             if not host.is_file() or not guest.is_file() or host.samefile(guest):
                 raise RuntimeError("Debian needs two existing, separate disks; prepare them first")
             maintenance.check_stopped(host, guest)
-            password = read_password(os.environ.get("PMPVIRT_PASSWORD_FILE"))
+            password = read_password(os.environ.get("VIRT_PASSWORD_FILE"))
             env.update(DEBIAN_HOST_DISK=str(host), DEBIAN_GUEST_DISK=str(guest))
             suite.mark("environment", "PASS", "磁盘已检查；使用外层 root 登录")
             runtime_started = True

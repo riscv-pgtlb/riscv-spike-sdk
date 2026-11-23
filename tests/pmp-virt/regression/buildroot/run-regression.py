@@ -19,7 +19,7 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("virt_build", ROOT / "scripts/build/virt-kvm.py")
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
-spec = importlib.util.spec_from_file_location("syscall_evidence", ROOT / "tests/pmp-virt/regression/run-suite.py")
+spec = importlib.util.spec_from_file_location("syscall_evidence", ROOT / "tests/run-suite.py")
 evidence = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evidence)
 STEPS = (

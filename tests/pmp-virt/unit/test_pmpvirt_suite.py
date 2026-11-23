@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
-spec = importlib.util.spec_from_file_location("pmpvirt_suite_tests", ROOT / "tests/pmp-virt/regression/run-suite.py")
+spec = importlib.util.spec_from_file_location("pmpvirt_suite_tests", ROOT / "tests/run-suite.py")
 suite = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(suite)
 
@@ -70,14 +70,14 @@ class SuiteResultChecks(unittest.TestCase):
                 self.assertTrue(report.finish())
             text = output.getvalue()
             self.assertIn("[TEST 01] [PASS] SDK 单元测试", text)
-            self.assertIn("[TEST 11] [PASS] VS–HS–VS 同物理页执行权限对照", text)
-            self.assertIn("[TEST 17] [PASS] 测试命令与 QEMU 正常退出", text)
+            self.assertIn("[TEST 12] [PASS] VS–HS–VS 同物理页执行权限对照", text)
+            self.assertIn("[TEST 18] [PASS] 测试命令与 QEMU 正常退出", text)
             self.assertNotIn("internal evidence.log", text)
-            footer = f"结果：PASS（17/17）\n耗时：12.50 秒\n证据目录：{folder}\n"
+            footer = f"结果：PASS（18/18）\n耗时：12.50 秒\n证据目录：{folder}\n"
             self.assertTrue(text.endswith(footer))
             self.assertTrue((folder / "summary.txt").read_text().endswith(footer))
             state = json.loads((folder / "result.json").read_text())
-            self.assertEqual(state["counts"], {"total": 17, "passed": 17, "failed": 0, "skipped": 0})
+            self.assertEqual(state["counts"], {"total": 18, "passed": 18, "failed": 0, "skipped": 0})
             self.assertEqual(state["cases"][0]["detail"], "internal evidence.log")
 
     def test_failure_footer_keeps_actual_counts_and_diagnostics(self):
@@ -90,11 +90,11 @@ class SuiteResultChecks(unittest.TestCase):
                 self.assertFalse(report.finish())
             text = output.getvalue()
             self.assertIn("失败阶段：", text)
-            self.assertIn("结果：FAIL（0/17）", text)
+            self.assertIn("结果：FAIL（0/18）", text)
             state = json.loads((Path(directory) / "result.json").read_text())
             self.assertEqual(state["counts"]["failed"], 1)
-            self.assertEqual(state["counts"]["skipped"], 16)
-            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 17)
+            self.assertEqual(state["counts"]["skipped"], 17)
+            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 18)
 
     def test_vs_hs_raw_carriage_return_between_result_and_host_printk(self):
         host = ("[   40.193687] PMP.Virt USER PTE: flags=247168eb required=b user=0 write=0\n"
@@ -174,9 +174,9 @@ class SuiteResultChecks(unittest.TestCase):
     def test_vs_hs_follows_host_before_and_precedes_guest_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             cases = suite.Suite(Path(directory), "debian").cases
-        self.assertEqual(len(cases), 17)
-        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 17)
-        self.assertEqual(next(c["number"] for c in cases if c["id"] == "vs_hs"), 11)
+        self.assertEqual(len(cases), 18)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 18)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "vs_hs"), 12)
 
     def test_syscalls_require_all_operations_correct_causes_and_both_phases(self):
         original = transcript()

@@ -13,7 +13,7 @@ arch/riscv/kernel/pv_access.c 保留旧 HU ioctl 0x56、guest 会话 ioctl 0x57 
 
 | 文件 | 处理 |
 | --- | --- |
-| conf/pmp-virt/sources.json 与 repo/linux gitlink | 同步到上述合并提交；guest 和 kvmtool 版本不回退。 |
+| conf/virt/sources.json 与 repo/linux gitlink | 同步到上述合并提交；guest 和 kvmtool 版本不回退。 |
 | scripts/build/virt-kvm.py | 保留 guest worktree、探针开关、重命名路径和共用日志检查器；增加两份 syscall 工具的输入校验、编译、产物校验与打包。 |
 | tests/pmp-virt/regression/run-suite.py | 保留 17 项及新输出；host 前后检查要求同页和 syscall 完整证据，第 11 项仍单独核验 VS–HS–VS。 |
 | tests/pmp-virt/unit/test_build.py | 两套构建/日志样本合并，不删除旧测试。 |

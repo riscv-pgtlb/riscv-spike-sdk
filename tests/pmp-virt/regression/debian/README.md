@@ -2,7 +2,7 @@
 
 外层执行 test-virt-debian-all /dev/vdb；测试脚本及服务由安装器安装。
 
-服务器可用 `make pmpvirt-test` 自动登录并驱动本套件，入口是 [run-suite.py](../run-suite.py)。
+服务器可用 `make virt-test` 自动登录并驱动本套件，入口是 [run-suite.py](../../../run-suite.py)。
 
 | 文件或目录 | 用途 |
 | --- | --- |

@@ -6,7 +6,7 @@
 
 | 文件/记录 | 作用 |
 | --- | --- |
-| `conf/pmp-virt/sources.json` | host=`f71c60d7b3e8ca338ac99463aaa70df744b37063`；guest=`b17be9459b581c2e6e090082b3a164e34731c061`；kvmtool=`3010d50f699b7f62aea63d49bbed2242959d23d3`。guest 路径为 repo/linux-guest。 |
+| `conf/virt/sources.json` | host=`f71c60d7b3e8ca338ac99463aaa70df744b37063`；guest=`b17be9459b581c2e6e090082b3a164e34731c061`；kvmtool=`3010d50f699b7f62aea63d49bbed2242959d23d3`。guest 路径为 repo/linux-guest。 |
 | SDK 的 `repo/linux`、`repo/kvmtool` gitlink | 在暂存区同步已推送的子模块提交，满足与版本锁一致的检查；尚未提交 SDK。 |
 | `.gitmodules` 与版本锁中的 kvmtool URL | 核对使用团队 fork https://github.com/riscv-pgtlb/kvmtool.git；该地址在本轮开始前已设置，本轮未重复修改。 |
 

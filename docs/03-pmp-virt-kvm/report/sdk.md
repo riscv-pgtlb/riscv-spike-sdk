@@ -8,8 +8,8 @@
 | --- | --- |
 | [Makefile](../../../Makefile) | 修改集成入口：构建/校验、静态测试、统一回归、Debian 准备/启动/更新及工具包服务。 |
 | [.gitmodules](../../../.gitmodules) | 子模块来源配置，Linux、OpenSBI、QEMU 指向团队实现仓库及对应分支。 |
-| [conf/pmp-virt/sources.json](../../../conf/pmp-virt/sources.json) | 版本锁，区分 host/guest Linux，固定 QEMU、固件和构建依赖。 |
-| [conf/pmp-virt/linux.config](../../../conf/pmp-virt/linux.config) | 实验内核配置输入，与构建脚本生成的角色配置共同使用。 |
+| [conf/virt/sources.json](../../../conf/virt/sources.json) | 版本锁，区分 host/guest Linux，固定 QEMU、固件和构建依赖。 |
+| [conf/virt/linux.config](../../../conf/virt/linux.config) | 实验内核配置输入，与构建脚本生成的角色配置共同使用。 |
 | [scripts/build/virt-kvm.py](../../../scripts/build/virt-kvm.py) | 工具链和源码检查、隔离构建、布局生成、固件编译、rootfs 打包、产物清单校验、重打包及启动。最近同步了测试源文件的新名称。 |
 | [scripts/buildroot/run-virt-guest.sh](../../../scripts/buildroot/run-virt-guest.sh) | Buildroot host 内通过 lkvm 启动普通 guest，支持回归模式。 |
 | [scripts/buildroot/run-virt-debian.sh](../../../scripts/buildroot/run-virt-debian.sh) | Buildroot host 内启动 Debian guest。 |

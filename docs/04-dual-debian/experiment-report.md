@@ -21,7 +21,7 @@
 | lkvm/kvmtool | 外层用户程序，通过 `/dev/kvm` 运行内层 | 复用静态程序，自动打包安装 |
 | Debian 13 | 两层 systemd、shell、工具与持久文件系统 | 分别配置独立磁盘和安装内容 |
 
-版本依据是 [sources.json](../../conf/pmp-virt/sources.json)。本次配置固定的核心提交为：
+版本依据是 [sources.json](../../conf/virt/sources.json)。本次配置固定的核心提交为：
 
 | 组件 | 固定提交 |
 | --- | --- |

@@ -35,7 +35,7 @@ QEMU 当前代码在匹配到带 `PMP_VIRT` 的区域时，对非 M 模式且满
 
 ## 2. 在哪些组件上改了什么
 
-三个核心组件通过团队子模块维护，具体提交固定在 [sources.json](../../conf/pmp-virt/sources.json)，SDK 不在每次构建时动态套用补丁。
+三个核心组件通过团队子模块维护，具体提交固定在 [sources.json](../../conf/virt/sources.json)，SDK 不在每次构建时动态套用补丁。
 
 ### 2.1 QEMU：实现实验性的权限语义
 

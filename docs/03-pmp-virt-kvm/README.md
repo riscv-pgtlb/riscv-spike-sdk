@@ -1,7 +1,7 @@
 # 第三阶段：PMP.Virt + KVM
 
 目标是让 OpenSBI 与 host Linux 配合封存 PMP.Virt 规则，运行普通 KVM guest，并在 guest 返回后复测 host 保护。
-核心改动直接维护在 QEMU、Linux、OpenSBI 团队子模块，版本锁见项目根目录的 `conf/pmp-virt/sources.json`。
+核心改动直接维护在 QEMU、Linux、OpenSBI 团队子模块，版本锁见项目根目录的 `conf/virt/sources.json`。
 本阶段的构建产物也供 [双 Debian](../04-dual-debian/README.md) 使用。
 
 ## 文件与目录
@@ -66,6 +66,6 @@ HS 6/6 与 SBI guard 18/18 来自 host 启动检查，guest 返回后实际重�
 
 host 源码在 `repo/linux/`，guest 源码在 `repo/linux-guest/`。guest 是同一 Linux 仓库的 worktree，SDK 不把它注册为第二个子模块；`make virt-prepare` 在目录缺失时按 guest 版本锁创建 detached worktree，已有目录则只检查，不切换分支或覆盖修改。
 
-两边的 HEAD 必须分别匹配 `conf/pmp-virt/sources.json`，且源码目录必须干净；开发完成后先提交并更新版本锁。guest 不要求匹配 host 子模块指针。编译输出仍在 `build/virt-kvm/out/linux-host/`、`build/virt-kvm/out/linux-guest/`。
+两边的 HEAD 必须分别匹配 `conf/virt/sources.json`，且源码目录必须干净；开发完成后先提交并更新版本锁。guest 不要求匹配 host 子模块指针。编译输出仍在 `build/virt-kvm/out/linux-host/`、`build/virt-kvm/out/linux-guest/`。
 
 旧 `build/virt-kvm/src/linux-guest/` 已停用。此路径迁移后，旧产物清单可能需要重新生成；源码检查通过不代表原有产物已经重新构建或通过运行验证。
