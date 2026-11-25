@@ -43,6 +43,8 @@ def check_transcript(text):
             raise RuntimeError(f"Missing or out-of-order runtime result: {marker}")
         positions.append((position + found.start(), position + found.end()))
         position += found.end()
+    if "Host Linux Stage2Virt selftest PASS" not in text[:positions[0][0]]:
+        raise RuntimeError("Missing Host Linux Stage2Virt selftest result")
     before = re.search(r"(?m)^VIRT-REGRESSION HOST BEFORE PASS\r*$", text)
     returned = re.search(r"(?m)^VIRT-REGRESSION GUEST RETURNED\r*$", text)
     checker = ROOT / "tests/pmp-virt/runtime/check-virt-vs-hs.sh"

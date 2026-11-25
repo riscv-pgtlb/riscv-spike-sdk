@@ -27,7 +27,8 @@ VS_HS_EVIDENCE = (
 )
 
 def runtime_lines():
-    lines = ["PMP.Virt SEALED:", "VIRT-KVM GUEST BOOTED"]
+    lines = ["Host Linux Stage2Virt selftest PASS",
+             "PMP.Virt SEALED:", "VIRT-KVM GUEST BOOTED"]
     # Reuse the complete captured-format fixture, then mutate it in parser tests.
     from test_pmpvirt_suite import syscall_output
     for marker in regression.STEPS:
@@ -255,6 +256,10 @@ class BuildChecks(unittest.TestCase):
              patch.object(build, "elf_machine"), patch.object(build, "append_archive"):
             build.package_rootfs(self.root / "base.cpio.gz")
         self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/check-virt-vs-hs")
+                            for call in copier.call_args_list))
+        self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/stage2_virt_test")
+                            for call in copier.call_args_list))
+        self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/check-stage2-virt-host")
                             for call in copier.call_args_list))
 
     def test_buildroot_only_enables_vs_hs_in_regression_mode(self):

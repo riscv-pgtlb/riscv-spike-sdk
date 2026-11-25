@@ -3,7 +3,7 @@
   "sources": {
     "linux-host": {
       "path": "repo/linux",
-      "revision": "ea10ef418cd7ca6359d2931d77ebca7269969091",
+      "revision": "11cfb26adfc295c47b140d5e376dcae3d15d2ea0",
       "url": "https://github.com/riscv-pgtlb/linux.git"
     },
     "linux-guest": {

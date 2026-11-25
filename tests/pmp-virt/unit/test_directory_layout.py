@@ -17,10 +17,12 @@ class PackageLayoutChecks(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         for relative in ("scripts/debian/install", "scripts/debian/update", "scripts/debian/common", "scripts/debian/run",
-                         "tests/pmp-virt/runtime", "tests/pmp-virt/regression/debian"):
+                         "tests/pmp-virt/runtime", "tests/pmp-virt/regression/debian",
+                         "tests/G-stage-virt"):
             shutil.copytree(ROOT / relative, self.root / relative)
         for relative in ("build/virt-kvm/src/kvmtool/lkvm-static", "build/virt-kvm/out/pv-user-test",
                          "build/virt-kvm/out/pv-syscall-api", "build/virt-kvm/out/pv-syscall-attack",
+                         "build/virt-kvm/out/kvm-selftests/riscv/stage2_virt_test",
                          "build/virt-kvm/out/linux-guest/arch/riscv/boot/Image"):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,6 +74,8 @@ class PackageLayoutChecks(unittest.TestCase):
                 self.assertTrue((installed / "usr/bin" / name).is_file())
             self.assertTrue((installed / "usr/local/bin/run-debian-guest").is_file())
             self.assertTrue((installed / "usr/local/bin/check-virt-vs-hs").is_file())
+            self.assertTrue((installed / "usr/local/bin/check-stage2-virt-host").is_file())
+            self.assertTrue((installed / "usr/bin/stage2_virt_test").is_file())
             self.assertTrue((installed / "usr/local/bin/update-host-tools").is_file())
             self.assertTrue((installed / "usr/local/bin/test-virt-debian-all").is_file())
             self.assertTrue((installed / "opt/guest/Image").is_file())

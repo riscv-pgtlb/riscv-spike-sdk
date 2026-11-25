@@ -23,6 +23,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 GUARDS = ("DBCN READ", "PMU", "DBTR", "SSE", "MPXY", "HSM STATUS", "SUSP", "FWFT", "CPPC")
 RUNTIME_CASES = (
+    ("stage2_host", "Host Linux KVM Stage2Virt运行时测试"),
     ("seal", "PMP.Virt 策略封存与内核确认"),
     ("hs_ram", "HS RAM 执行权限：封存前允许，封存后拒绝"),
     ("hs_text", "内核 text 写保护：可写别名访问被拒绝"),
@@ -113,6 +114,7 @@ def runtime_results(text, expected_versions=None):
     """Only real complete output lines count; shell echoes are not results."""
     lines = canonical_lines(text)
     outcomes = {key: False for key, _ in RUNTIME_CASES}
+    outcomes["stage2_host"] = "Host Linux Stage2Virt selftest PASS" in lines
     outcomes["seal"] = ordered(lines, (r"PMP\.Virt SEALED: text=.*", r"PMP\.Virt seal acknowledged"))
     for key, name, cause in (("hs_ram", "HS RAM execute", 1),
                              ("hs_text", "text writable alias", 7),
@@ -156,7 +158,7 @@ def runtime_results(text, expected_versions=None):
     outcomes["runtime"] = ordered(lines, tuple(re.escape(marker) for marker in (
         "VIRT-REGRESSION HOST BEFORE PASS", "VIRT-REGRESSION GUEST RETURNED",
         "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS")))
-    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL", text):
+    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL|Host Linux Stage2Virt selftest FAIL", text):
         outcomes["runtime"] = False
         outcomes["vs_hs"] = False
     return outcomes

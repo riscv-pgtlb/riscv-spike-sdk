@@ -1,26 +1,24 @@
-按推荐实施顺序，需要修改以下文件夹：
-1. **QEMU**：定义 G-stage.Virt 硬件语义
-   repo/qemu/target/riscv/
-2. **Host Linux**：增加页表位定义
+
+1. **Host Linux**：增加页表位定义
    repo/linux/arch/riscv/include/asm/
    1. **Host Linux/KVM**：生成 G-stage PTE、刷新 TLB、处理预期故障
    repo/linux/arch/riscv/kvm/
    2. **Host Linux**：增加实验接口或公共数据结构
    repo/linux/include/uapi/linux/
    repo/linux/include/linux/
-3. **Guest Linux**：实现 VU–VS–VU 同页探针
+2. **Guest Linux**：实现 VU–VS–VU 同页探针
    repo/linux-guest/arch/riscv/kernel/
    repo/linux-guest/arch/riscv/include/asm/
    1. Guest Linux：增加测试配置和编译入口
    repo/linux-guest/arch/riscv/
-4. **kvmtool**：实现 Stage2Virt 协调和 KVM ioctl 调用
+3. **kvmtool**：实现 Stage2Virt 协调和 KVM ioctl 调用
    repo/kvmtool/riscv/
    repo/kvmtool/riscv/include/kvm/
    1. kvmtool：加入对象编译和本地测试
    repo/kvmtool/
    repo/kvmtool/tests/
    repo/kvmtool/Documentation/
-5. SDK版本锁和内核配置
+4. SDK版本锁和内核配置
    /conf/virt/
    1.  SDK构建和 QEMU启动参数
     /scripts/build/

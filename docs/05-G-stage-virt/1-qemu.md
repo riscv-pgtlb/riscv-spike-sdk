@@ -18,7 +18,7 @@ VU：G-stage层获得 RWX
 
 > 但如果 VU第一阶段页表只有 RX，最终仍然只有 RX，Stage2Virt不能绕过第一阶段页表。
 
-## 1 需要修改的 QEMU文件
+## 1 修改 QEMU
 
 ```text
 repo/qemu/target/riscv/cpu_bits.h    // 定义 PTE_STAGE2_VIRT
