@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDS = ("DBCN READ", "PMU", "DBTR", "SSE", "MPXY", "HSM STATUS", "SUSP", "FWFT", "CPPC")
 RUNTIME_CASES = (
     ("stage2_host", "Host Linux KVM Stage2Virt运行时测试"),
+    ("stage2_kvmtool", "kvmtool Stage2Virt真实 ioctl 测试"),
     ("seal", "PMP.Virt 策略封存与内核确认"),
     ("hs_ram", "HS RAM 执行权限：封存前允许，封存后拒绝"),
     ("hs_text", "内核 text 写保护：可写别名访问被拒绝"),
@@ -40,6 +41,15 @@ RUNTIME_CASES = (
 )
 HOST_PASS = "VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, syscall API, syscall attack, /dev/kvm"
 USER_PASS = "PMP.Virt USER SUMMARY: PASS U-success / HS-access-fault / U-success"
+STAGE2_KVMTOOL_PASS = "Kvmtool Stage2Virt ioctl smoke PASS"
+
+
+def display_path(path):
+    path = Path(path)
+    try:
+        return path.resolve().relative_to(ROOT)
+    except ValueError:
+        return path
 
 
 def colored(text, status):
@@ -115,6 +125,7 @@ def runtime_results(text, expected_versions=None):
     lines = canonical_lines(text)
     outcomes = {key: False for key, _ in RUNTIME_CASES}
     outcomes["stage2_host"] = "Host Linux Stage2Virt selftest PASS" in lines
+    outcomes["stage2_kvmtool"] = STAGE2_KVMTOOL_PASS in lines
     outcomes["seal"] = ordered(lines, (r"PMP\.Virt SEALED: text=.*", r"PMP\.Virt seal acknowledged"))
     for key, name, cause in (("hs_ram", "HS RAM execute", 1),
                              ("hs_text", "text writable alias", 7),
@@ -253,9 +264,16 @@ def failure_info(error, transcript="", cases=()):
                     blocked="磁盘检查未通过，未启动此项")
     else:
         failed = next((case for case in cases if case["status"] == "FAIL"), None)
-        if failed and failed["id"] in ("static", "artifacts"):
-            name = "static.log" if failed["id"] == "static" else "verify.log"
-            info.update(code="STATIC_FAILURE" if name == "static.log" else "ARTIFACT_FAILURE",
+        preflight_logs = {
+            "static": "static.log",
+            "pmp_virt_mock": "pmp-virt-mock.log",
+            "stage2_virt_mock": "stage2-virt-mock.log",
+            "artifacts": "verify.log",
+        }
+        if failed and failed["id"] in preflight_logs:
+            name = preflight_logs[failed["id"]]
+            code = "ARTIFACT_FAILURE" if failed["id"] == "artifacts" else "STATIC_FAILURE"
+            info.update(code=code,
                         stage=failed["name"], reason=f"前置检查失败，详情见 {name}；虚拟机回归尚未开始。",
                         actions=[f"先解决 {name} 中的第一个错误，再重新运行。"],
                         blocked="前置检查失败，未启动此项")
@@ -278,20 +296,36 @@ def stop_process(process):
             process.wait()
 
 
-def run_buildroot(command, env, log_path, timeout):
+def run_buildroot(command, env, log_path, timeout, progress=None):
     with log_path.open("w") as log:
         process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
+        deadline = time.monotonic() + timeout
+        reported_size = -1
         try:
-            result = process.wait(timeout=timeout)
+            while process.poll() is None and time.monotonic() < deadline:
+                try:
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    if progress:
+                        log.flush()
+                        size = log_path.stat().st_size
+                        if size != reported_size:
+                            progress(log_path.read_text(errors="replace"))
+                            reported_size = size
+            if process.poll() is None:
+                return "Buildroot runner exceeded its timeout"
+            if progress:
+                log.flush()
+                progress(log_path.read_text(errors="replace"))
+            result = process.returncode
             return None if result == 0 else "Buildroot runtime failed; see console.log"
-        except subprocess.TimeoutExpired:
-            return "Buildroot runner exceeded its timeout"
         finally:
             stop_process(process)
 
 
-def run_debian(command, env, password, log_path, timeout, expected_versions=None):
+def run_debian(command, env, password, log_path, timeout, expected_versions=None, progress=None,
+               runtime_start=None, progress_name=None):
     token = uuid.uuid4().hex
     done = f"PMPVIRT-SUITE-EXIT-{token}"
     version_args = ""
@@ -340,7 +374,9 @@ def run_debian(command, env, password, log_path, timeout, expected_versions=None
                 if time.monotonic() >= next_progress:
                     description = {"login": "等待外层登录提示", "password": "等待密码提示",
                                    "shell": "等待外层命令提示符", "running": "完整回归运行中"}[state]
-                    report("RUN", f"{description}；详细输出：{log_path}")
+                    if state == "running" and progress_name:
+                        description = "当前测试：" + progress_name()
+                    report("RUN", f"{description}；详细输出：{display_path(log_path)}")
                     next_progress = time.monotonic() + 30
                 try:
                     data = chunks.get(timeout=0.5)
@@ -352,6 +388,9 @@ def run_debian(command, env, password, log_path, timeout, expected_versions=None
                 log.write(redactor.feed(text))
                 log.flush()
                 transcript += text
+                if progress:
+                    if progress(transcript):
+                        next_progress = time.monotonic() + 30
                 tail = terminal_text(transcript[-8192:])
                 if state == "login" and re.search(r"(?:^|\n)[^\n]*login:\s*$", tail):
                     send("root\n")
@@ -365,6 +404,8 @@ def run_debian(command, env, password, log_path, timeout, expected_versions=None
                     send(setup)
                     state = "running"
                     report("RUN", "外层已登录，执行现有双 Debian 完整套件")
+                    if runtime_start:
+                        runtime_start()
                 elif state == "shell" and re.search(r"Login incorrect|Authentication failure", tail):
                     raise RuntimeError("Debian root authentication failed")
                 if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|Kernel panic", transcript):
@@ -403,6 +444,8 @@ class Suite:
         self.started = time.monotonic()
         self.cases = [{"id": key, "name": name, "status": "SKIP", "detail": "未执行"}
                       for key, name in (("static", "SDK 单元测试"),
+                                        ("pmp_virt_mock", "PMP.Virt kvmtool mock 测试"),
+                                        ("stage2_virt_mock", "Stage2Virt kvmtool mock 测试"),
                                         ("stage2_virt", "QEMU Stage2Virt语义测试"),
                                         ("artifacts", "构建产物完整性与内核—固件配对"),
                                         ("environment", "运行环境与磁盘可用性"), *RUNTIME_CASES,
@@ -415,8 +458,7 @@ class Suite:
         self.reported = set()
 
     def report_case(self, case, status, message):
-        number = None if status == "RUN" else case["number"]
-        report(status, message, number)
+        report(status, message, case["number"])
 
     def mark(self, key, status, detail=""):
         case = next(item for item in self.cases if item["id"] == key)
@@ -424,9 +466,10 @@ class Suite:
         self.reported.add(key)
         self.report_case(case, status, case['name'] + (f"：{detail}" if detail and status != "PASS" else ""))
 
-    def command(self, key, command, logfile, timeout=120, env=None):
-        case = next(item for item in self.cases if item['id'] == key)
-        self.report_case(case, "RUN", case["name"])
+    def command(self, key, command, logfile, timeout=120, env=None, announce=False):
+        if announce:
+            case = next(item for item in self.cases if item["id"] == key)
+            self.report_case(case, "RUN", case["name"])
         with (self.folder / logfile).open("w") as log:
             try:
                 result = subprocess.run(command, cwd=ROOT, env=env, stdout=log,
@@ -456,7 +499,7 @@ class Suite:
         (self.folder / "result.json").write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
         footer = [f"结果：{state['status']}（{counts['PASS']}/{len(self.cases)}）",
                   f"耗时：{state['elapsed_seconds']:.2f} 秒",
-                  f"证据目录：{self.folder}"]
+                  f"证据目录：{display_path(self.folder)}"]
         lines = []
         lines.extend("{} [{}] {} {}".format(f"[TEST {case['number']:02d}]".ljust(9),
                                           case["status"], case["name"], case["detail"] if case["status"] != "PASS" else "").rstrip()
@@ -476,14 +519,107 @@ class Suite:
             print(f"          原因：{diagnostics['reason']}", flush=True)
             for index, action in enumerate(diagnostics["actions"], 1):
                 print(f"          建议 {index}：{action}", flush=True)
-            print(f"          运行日志：{self.folder / 'console.log'}" if (self.folder / "console.log").exists()
-                  else f"          检查日志：{self.folder}", flush=True)
-            print(f"          本轮输入：{self.folder / 'inputs.json'}", flush=True)
+            print(f"          运行日志：{display_path(self.folder / 'console.log')}"
+                  if (self.folder / "console.log").exists()
+                  else f"          检查日志：{display_path(self.folder)}", flush=True)
+            print(f"          本轮输入：{display_path(self.folder / 'inputs.json')}", flush=True)
         for case in self.cases:
             if case["status"] == "SKIP" and case["id"] not in self.reported:
                 self.report_case(case, "SKIP", f"{case['name']}：{case['detail']}")
         print("\n" + "\n".join(footer), flush=True)
         return passed
+
+
+class LiveRuntimeReporter:
+    """Report completed runtime cases while one shared VM run is still active."""
+    EVIDENCE_PREFIXES = (
+        "Host Linux Stage2Virt", "Kvmtool Stage2Virt", "PMP.Virt SEALED:",
+        "PMP.Virt seal acknowledged", "PMP.Virt TEST PASS", "PMP.Virt SBI GUARD PASS",
+        "VIRT TOOLS VERSION", "PASS U execute", "PASS HS denied", "PMP.Virt USER SUMMARY:",
+        "SYSCALL-", "VIRT-KVM HOST CHECK PASS:", "PMP.Virt VS ", " Info: PMP.Virt VS/HS ",
+        "PMP.Virt VS-HS-VS ", "VIRT-REGRESSION ",
+    )
+    RUN_LABELS = {
+        "stage2_host": "Host Linux KVM Stage2Virt运行时测试",
+        "stage2_kvmtool": "kvmtool Stage2Virt真实 ioctl 测试",
+        "vs_hs": "启动内层 guest，执行 VS–HS–VS 测试",
+        "guest_return": "内层 guest 正在 poweroff，等待返回 host",
+        "host_after": "guest 已返回，执行 host 返回后复测",
+        "shutdown": "外层 Debian 正在 poweroff，等待 QEMU 退出",
+    }
+
+    GUEST_MILESTONES = (
+        ("PMP.Virt VS BEFORE PASS:", "内层 guest 已启动，VS 首次执行通过"),
+        ("PMP.Virt VS/HS BEGIN:", "正在执行 HS 同物理页探测"),
+        ("PMP.Virt VS AFTER PASS:", "HS 探测完成，VS 再次执行通过"),
+        ("PMP.Virt VS/HS COMPLETE:", "VS–HS–VS 五阶段证据已收集完成"),
+    )
+    LOG_EVIDENCE_CASES = {"stage2_host", "stage2_kvmtool", "vs_hs"}
+
+    def __init__(self, suite, log_path=None):
+        self.suite = suite
+        self.log_path = log_path
+        self.signature = ()
+        self.announced = set()
+        self.milestones = set()
+        self.seen_length = 0
+        self.enabled = False
+
+    def start(self):
+        self.enabled = True
+        self.announce_next()
+
+    def announce(self, key):
+        if (key in self.RUN_LABELS and key not in self.announced
+                and key not in self.suite.reported):
+            case = next(item for item in self.suite.cases if item["id"] == key)
+            self.suite.report_case(case, "RUN", self.RUN_LABELS[key])
+            self.announced.add(key)
+
+    def next_key(self):
+        return next((key for key, _ in RUNTIME_CASES if key not in self.suite.reported), "shutdown")
+
+    def current_name(self):
+        key = self.next_key()
+        return self.RUN_LABELS.get(
+            key, next(item["name"] for item in self.suite.cases if item["id"] == key))
+
+    def announce_next(self):
+        self.announce(self.next_key())
+
+    def observe(self, text):
+        if not self.enabled:
+            self.seen_length = len(text)
+            return False
+        new_text = terminal_text(text[max(0, self.seen_length - 256):])
+        self.seen_length = len(text)
+        if not any(marker in new_text for marker in self.EVIDENCE_PREFIXES):
+            return False
+        lines = canonical_lines(text)
+        signature = tuple(line for line in lines
+                          if any(marker in line for marker in self.EVIDENCE_PREFIXES))
+        if signature == self.signature:
+            return False
+        self.signature = signature
+        outcomes = runtime_results(text, expected_versions=self.suite.expected_tools)
+        changed = False
+        for key, _ in RUNTIME_CASES:
+            if key in self.suite.reported:
+                continue
+            self.announce(key)
+            if key == "vs_hs":
+                for marker, message in self.GUEST_MILESTONES:
+                    if marker not in self.milestones and any(marker in line for line in lines):
+                        report("RUN", message)
+                        self.milestones.add(marker)
+            if not outcomes[key]:
+                break
+            if key in self.LOG_EVIDENCE_CASES and self.log_path:
+                report("RUN", "证据日志：" + str(display_path(self.log_path)))
+            self.suite.mark(key, "PASS")
+            changed = True
+        self.announce_next()
+        return changed
 
 
 def main():
@@ -511,10 +647,19 @@ def main():
         (folder / "inputs.json").write_text(json.dumps(info, indent=2) + "\n")
         phase = "static"
         suite.command("static", [sys.executable, "-B", "-m", "unittest", "discover", "-s",
-                                 "tests/pmp-virt/unit", "-p", "test_*.py", "-v"], "static.log")
+                                 "tests/pmp-virt/unit", "-p", "test_*.py", "-v"], "static.log",
+                      announce=True)
+        phase = "pmp_virt_mock"
+        suite.command("pmp_virt_mock",
+                      [sys.executable, "-B", str(ROOT / "repo/kvmtool/tests/pmp-virt-test.py")],
+                      "pmp-virt-mock.log", announce=True)
+        phase = "stage2_virt_mock"
+        suite.command("stage2_virt_mock",
+                      [sys.executable, "-B", str(ROOT / "repo/kvmtool/tests/stage2-virt-test.py")],
+                      "stage2-virt-mock.log", announce=True)
         phase = "stage2_virt"
         suite.command("stage2_virt", ["sh", str(ROOT / "tests/G-stage-virt/check-stage2-virt-qemu.sh")],
-                      "stage2-virt.log", timeout=120)
+                      "stage2-virt.log", timeout=120, announce=True)
         phase = "artifacts"
         suite.command("artifacts", [sys.executable, "-B", "scripts/build/virt-kvm.py", "verify"], "verify.log")
         shutil.copyfile(ROOT / "build/virt-kvm/manifest.json", folder / "manifest.json")
@@ -540,23 +685,39 @@ def main():
             env.update(DEBIAN_HOST_DISK=str(host), DEBIAN_GUEST_DISK=str(guest))
             suite.mark("environment", "PASS", "磁盘已检查；使用外层 root 登录")
             runtime_started = True
+            live = LiveRuntimeReporter(suite, folder / "console.log")
+            live.announce_next()
+            report("RUN", "双 Debian 启动中")
             transcript, error = run_debian(["bash", str(ROOT / "scripts/debian/run/run-dual-debian.sh")],
                                             env, password, folder / "console.log", args.timeout,
-                                            expected_versions=suite.expected_tools)
+                                            expected_versions=suite.expected_tools,
+                                            progress=live.observe,
+                                            runtime_start=live.start,
+                                            progress_name=live.current_name)
             del password
         else:
             suite.mark("environment", "PASS", "复用现有 Buildroot 自动回归入口")
             runtime_started = True
+            live = LiveRuntimeReporter(suite, folder / "console.log")
+            live.start()
+            report("RUN", "Buildroot 回归启动中")
             command = [sys.executable, "-B", str(ROOT / "tests/pmp-virt/regression/buildroot/run-regression.py"),
                        "--timeout", str(args.timeout)]
-            error = run_buildroot(command, env, folder / "console.log", args.timeout + 45)
+            error = run_buildroot(command, env, folder / "console.log", args.timeout + 45,
+                                  progress=live.observe)
             transcript = (folder / "console.log").read_text()
         outcomes = runtime_results(transcript, expected_versions=suite.expected_tools)
         suite.transcript = transcript
         diagnostics = failure_info(error, transcript) if error else None
         for key in outcomes:
-            suite.mark(key, "PASS" if outcomes[key] else ("FAIL" if error is None else "SKIP"),
+            if key in suite.reported and outcomes[key]:
+                continue
+            status = ("PASS" if outcomes[key] else
+                      ("FAIL" if key in suite.reported or error is None else "SKIP"))
+            suite.mark(key, status,
                        "" if outcomes[key] else (diagnostics["blocked"] if diagnostics else "缺少成功证据，查看 console.log"))
+        if "shutdown" not in suite.reported:
+            live.announce_next()
         suite.mark("shutdown", "PASS" if error is None else "FAIL", error or "")
         if error or not all(outcomes.values()):
             raise RuntimeError(error or "Runtime output is missing required individual test results")

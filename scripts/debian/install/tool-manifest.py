@@ -19,6 +19,7 @@ HOST = (
     ("tests/pmp-virt/runtime/check-virt-host.sh", None, "0755", "/usr/bin/check-virt-host"),
     ("tests/pmp-virt/runtime/check-virt-vs-hs.sh", None, "0755", "/usr/local/bin/check-virt-vs-hs"),
     ("tests/G-stage-virt/check-stage2-virt-host.sh", None, "0755", "/usr/local/bin/check-stage2-virt-host"),
+    ("tests/G-stage-virt/check-stage2-virt-kvmtool.sh", None, "0755", "/usr/local/bin/check-stage2-virt-kvmtool"),
     ("scripts/debian/run/run-debian-guest.sh", "payload/run-debian-guest", "0755", "/usr/local/bin/run-debian-guest"),
     ("tests/pmp-virt/regression/debian/test-virt-debian-all.sh", None, "0755", "/usr/local/bin/test-virt-debian-all"),
     ("scripts/debian/update/update-host-tools.sh", None, "0755", "/usr/local/bin/update-host-tools"),

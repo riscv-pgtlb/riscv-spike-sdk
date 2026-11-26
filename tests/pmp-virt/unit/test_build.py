@@ -262,6 +262,17 @@ class BuildChecks(unittest.TestCase):
         self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/check-stage2-virt-host")
                             for call in copier.call_args_list))
 
+    def test_host_headers_install_uses_kernel_output_tree(self):
+        source = self.root / "repo/linux"
+        source.mkdir(parents=True)
+        with patch.object(build, "verify_source", return_value=source), \
+             patch.object(build, "run") as commands, \
+             patch.object(build, "elf_machine"):
+            build.build_host_selftest("cross-")
+        headers_command = commands.call_args_list[0].args[0]
+        self.assertIn(f"O={build.WORK / 'out/linux-host'}", headers_command)
+        self.assertIn("headers_install", headers_command)
+
     def test_buildroot_only_enables_vs_hs_in_regression_mode(self):
         script = (ROOT / "scripts/buildroot/run-virt-guest.sh").read_text()
         binary = self.root / "bin"

@@ -43,6 +43,7 @@ VS_HS_EVIDENCE = (
 
 def transcript():
     lines = ["Host Linux Stage2Virt selftest PASS",
+             suite.STAGE2_KVMTOOL_PASS,
              "PMP.Virt SEALED: text=[0x80202000,0x81000000)", "PMP.Virt seal acknowledged"]
     for name, cause in (("HS RAM execute", 1), ("text writable alias", 7), ("rodata writable alias", 7)):
         lines += [f"PMP.Virt TEST PASS before {name} cause=0 pc=123",
@@ -71,14 +72,17 @@ class SuiteResultChecks(unittest.TestCase):
                 self.assertTrue(report.finish())
             text = output.getvalue()
             self.assertIn("[TEST 01] [PASS] SDK 单元测试", text)
-            self.assertIn("[TEST 13] [PASS] VS–HS–VS 同物理页执行权限对照", text)
-            self.assertIn("[TEST 19] [PASS] 测试命令与 QEMU 正常退出", text)
+            self.assertIn("[TEST 02] [PASS] PMP.Virt kvmtool mock 测试", text)
+            self.assertIn("[TEST 03] [PASS] Stage2Virt kvmtool mock 测试", text)
+            self.assertIn("[TEST 08] [PASS] kvmtool Stage2Virt真实 ioctl 测试", text)
+            self.assertIn("[TEST 16] [PASS] VS–HS–VS 同物理页执行权限对照", text)
+            self.assertIn("[TEST 22] [PASS] 测试命令与 QEMU 正常退出", text)
             self.assertNotIn("internal evidence.log", text)
-            footer = f"结果：PASS（19/19）\n耗时：12.50 秒\n证据目录：{folder}\n"
+            footer = f"结果：PASS（22/22）\n耗时：12.50 秒\n证据目录：{folder}\n"
             self.assertTrue(text.endswith(footer))
             self.assertTrue((folder / "summary.txt").read_text().endswith(footer))
             state = json.loads((folder / "result.json").read_text())
-            self.assertEqual(state["counts"], {"total": 19, "passed": 19, "failed": 0, "skipped": 0})
+            self.assertEqual(state["counts"], {"total": 22, "passed": 22, "failed": 0, "skipped": 0})
             self.assertEqual(state["cases"][0]["detail"], "internal evidence.log")
 
     def test_failure_footer_keeps_actual_counts_and_diagnostics(self):
@@ -91,11 +95,11 @@ class SuiteResultChecks(unittest.TestCase):
                 self.assertFalse(report.finish())
             text = output.getvalue()
             self.assertIn("失败阶段：", text)
-            self.assertIn("结果：FAIL（0/19）", text)
+            self.assertIn("结果：FAIL（0/22）", text)
             state = json.loads((Path(directory) / "result.json").read_text())
             self.assertEqual(state["counts"]["failed"], 1)
-            self.assertEqual(state["counts"]["skipped"], 18)
-            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 19)
+            self.assertEqual(state["counts"]["skipped"], 21)
+            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 22)
 
     def test_vs_hs_raw_carriage_return_between_result_and_host_printk(self):
         host = ("[   40.193687] PMP.Virt USER PTE: flags=247168eb required=b user=0 write=0\n"
@@ -175,9 +179,58 @@ class SuiteResultChecks(unittest.TestCase):
     def test_vs_hs_follows_host_before_and_precedes_guest_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             cases = suite.Suite(Path(directory), "debian").cases
-        self.assertEqual(len(cases), 19)
-        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 19)
-        self.assertEqual(next(c["number"] for c in cases if c["id"] == "vs_hs"), 13)
+        self.assertEqual(len(cases), 22)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "pmp_virt_mock"), 2)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_virt_mock"), 3)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_kvmtool"), 8)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 22)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "vs_hs"), 16)
+
+    def test_mock_failures_have_independent_preflight_diagnostics(self):
+        for case_id, logfile in (("pmp_virt_mock", "pmp-virt-mock.log"),
+                                 ("stage2_virt_mock", "stage2-virt-mock.log")):
+            with self.subTest(case_id=case_id), tempfile.TemporaryDirectory() as directory:
+                report = suite.Suite(Path(directory), "debian")
+                report.mark(case_id, "FAIL", "mock failure")
+                info = suite.failure_info("mock failure", cases=report.cases)
+                self.assertEqual(info["code"], "STATIC_FAILURE")
+                self.assertIn(logfile, info["reason"])
+
+    def test_kvmtool_stage2_ioctl_smoke_is_an_independent_runtime_case(self):
+        results = suite.runtime_results(transcript())
+        self.assertTrue(results["stage2_host"])
+        self.assertTrue(results["stage2_kvmtool"])
+
+        results = suite.runtime_results(transcript().replace(suite.STAGE2_KVMTOOL_PASS, ""))
+        self.assertTrue(results["stage2_host"])
+        self.assertFalse(results["stage2_kvmtool"])
+
+    def test_live_runtime_reporter_emits_each_pass_once_then_runs_shutdown(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = suite.Suite(Path(directory), "debian")
+            live = suite.LiveRuntimeReporter(report, Path(directory) / "console.log")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                live.start()
+                live.observe(transcript())
+                live.observe(transcript())
+        text = output.getvalue()
+        self.assertEqual(text.count("[PASS] Host Linux KVM Stage2Virt运行时测试"), 1)
+        self.assertEqual(text.count("[PASS] kvmtool Stage2Virt真实 ioctl 测试"), 1)
+        self.assertIn("[TEST 07] [RUN ] Host Linux KVM Stage2Virt运行时测试", text)
+        self.assertIn("[TEST 16] [RUN ] 启动内层 guest，执行 VS–HS–VS 测试", text)
+        self.assertLess(text.index("内层 guest 已启动，VS 首次执行通过"),
+                        text.index("[PASS] VS–HS–VS 同物理页执行权限对照"))
+        self.assertLess(text.index("证据日志："),
+                        text.index("[PASS] Host Linux KVM Stage2Virt运行时测试"))
+        self.assertIn("[RUN ] 外层 Debian 正在 poweroff，等待 QEMU 退出", text)
+        for key, label in suite.LiveRuntimeReporter.RUN_LABELS.items():
+            if key == "shutdown":
+                continue
+            name = next(name for case_id, name in suite.RUNTIME_CASES if case_id == key)
+            self.assertLess(text.index("[RUN ] " + label), text.index("[PASS] " + name))
+        self.assertNotIn("[RUN ] PMP.Virt 策略封存与内核确认", text)
+        self.assertTrue(all(key in report.reported for key, _ in suite.RUNTIME_CASES))
 
     def test_syscalls_require_all_operations_correct_causes_and_both_phases(self):
         original = transcript()

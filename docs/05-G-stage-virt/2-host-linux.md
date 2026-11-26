@@ -114,7 +114,7 @@ struct kvm_riscv_stage2_virt {
 
 在 capability 编号末尾、`243` 后面加入：
 ```c
-#define KVM_CAP_RISCV_STAGE2_VIRT 244
+#define KVM_CAP_RISCV_STAGE2_VIRT 247
 ```
 
 **作用**：kvmtool 可以先调用：
@@ -420,4 +420,6 @@ Debian test-virt-debian-all.sh
 
 两种环境均在启动内层 Guest 前执行 Host Stage2Virt 测试。
 
-修改 run-suite.py，新增“Host Linux KVM Stage2Virt运行时测试”，统一测试由 18 项增加到 19 项。
+修改 run-suite.py，新增“Host Linux KVM Stage2Virt运行时测试”。统一回归还把 PMP.Virt
+和 Stage2Virt 的 kvmtool mock 分别列为第 2、3 项，真实 kvmtool ioctl 冒烟测试列为
+第 8 项。测试总数为 22，每个检查都有独立结果和日志。

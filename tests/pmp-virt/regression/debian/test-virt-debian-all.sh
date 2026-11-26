@@ -27,6 +27,7 @@ guest_version=$paired_guest
 case "$guest_version" in *[!0-9a-f]*|'') echo 'Invalid guest tool version' >&2; exit 1 ;; esac
 test "${#guest_version}" -eq 64
 /usr/local/bin/check-stage2-virt-host
+/usr/local/bin/check-stage2-virt-kvmtool
 /usr/bin/check-virt-host
 test -b "$disk"
 

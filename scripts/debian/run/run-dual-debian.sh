@@ -39,7 +39,7 @@ guest_disk="${guest_disk//,/,,}"
 exec ./build/virt-kvm/out/qemu/qemu-system-riscv64 \
     -machine virt \
     -accel tcg \
-    -cpu rv64,h=true,smepmp=off,x-pmp-virt=on \
+    -cpu rv64,h=true,smepmp=off,x-pmp-virt=on,x-stage2-virt=on \
     -m 2048M -smp 1 -nographic \
     -bios build/virt-kvm/out/opensbi/platform/generic/firmware/fw_jump.bin \
     -kernel build/virt-kvm/out/linux-host/arch/riscv/boot/Image \

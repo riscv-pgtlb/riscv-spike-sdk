@@ -2,6 +2,7 @@
 set -eu
 trap 'echo "VIRT-REGRESSION FAIL host suite"' EXIT
 /usr/bin/check-stage2-virt-host
+/usr/local/bin/check-stage2-virt-kvmtool
 /usr/bin/check-virt-host
 echo 'VIRT-REGRESSION HOST BEFORE PASS'
 log=$(mktemp)

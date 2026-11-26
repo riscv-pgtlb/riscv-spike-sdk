@@ -29,6 +29,7 @@ SCRIPT_INPUTS = ("scripts/build/virt-kvm.py", "scripts/buildroot/run-virt-guest.
                  "repo/qemu/tests/tcg/riscv64/stage2-virt.S",
                  "tests/G-stage-virt/check-stage2-virt-qemu.sh",
                  "tests/G-stage-virt/check-stage2-virt-host.sh",
+                 "tests/G-stage-virt/check-stage2-virt-kvmtool.sh",
                  "tests/run-suite.py")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
@@ -426,10 +427,12 @@ def build_firmware(cross, jobs):
 
 def build_host_selftest(cross):
     source = verify_source("linux-host")
+    kernel_output = private_path(WORK / "out/linux-host")
     headers = private_path(WORK / "out/linux-headers")
     output = private_path(WORK / "out/kvm-selftests")
     test = output / "riscv/stage2_virt_test"
-    run(["make", "-C", source, "ARCH=riscv", f"INSTALL_HDR_PATH={headers}", "headers_install"])
+    run(["make", "-C", source, f"O={kernel_output}", "ARCH=riscv",
+         f"INSTALL_HDR_PATH={headers}", "headers_install"])
     run(["make", "-C", source / "tools/testing/selftests/kvm", "ARCH=riscv",
          f"CROSS_COMPILE={cross}", f"OUTPUT={output}",
          f"KHDR_INCLUDES=-isystem {headers / 'include'}", "LDFLAGS=-static", test])
@@ -505,6 +508,8 @@ def package_rootfs(base):
                 staging / "usr/bin/stage2_virt_test", True)
         install(ROOT / "tests/G-stage-virt/check-stage2-virt-host.sh",
                 staging / "usr/bin/check-stage2-virt-host", True)
+        install(ROOT / "tests/G-stage-virt/check-stage2-virt-kvmtool.sh",
+                staging / "usr/local/bin/check-stage2-virt-kvmtool", True)
         for name in ("syscall-api", "syscall-attack"):
             install(WORK / "out" / ("pv-" + name), staging / "usr/bin" / ("pv-" + name), True)
         install(ROOT / "scripts/buildroot/run-virt-guest.sh", staging / "usr/bin/run-virt-guest", True)
@@ -619,7 +624,8 @@ def build(jobs):
 def launch(dry_run):
     verify()
     command = [WORK / "out/qemu/qemu-system-riscv64", "-machine", "virt", "-accel", "tcg",
-               "-cpu", "rv64,h=true,smepmp=off,x-pmp-virt=on", "-m", "2048M", "-smp", "1", "-nographic",
+               "-cpu", "rv64,h=true,smepmp=off,x-pmp-virt=on,x-stage2-virt=on",
+               "-m", "2048M", "-smp", "1", "-nographic",
                "-bios", WORK / "out/opensbi/platform/generic/firmware/fw_jump.bin",
                "-kernel", WORK / "out/linux-host/arch/riscv/boot/Image",
                "-initrd", WORK / "images/host-rootfs.cpio.gz",
