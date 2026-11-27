@@ -8,7 +8,7 @@
     },
     "linux-guest": {
       "path": "repo/linux-guest",
-      "revision": "82afc5753ac8e6a79b5e46a75337bc48ece5c57d",
+      "revision": "eb0b925e4e4e4faf625089dc9ce445d9f9ba2685",
       "url": "https://github.com/riscv-pgtlb/linux.git"
     },
     "opensbi": {
@@ -28,7 +28,7 @@
     },
     "kvmtool": {
       "path": "repo/kvmtool",
-      "revision": "a4fdb219c75521504f20af6a5dde1536770f9f22",
+      "revision": "100131a46d9b852f29370ff18d07204c47d1a3a0",
       "url": "https://github.com/riscv-pgtlb/kvmtool.git"
     }
   }

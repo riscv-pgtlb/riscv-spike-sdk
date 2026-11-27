@@ -34,12 +34,11 @@ trap 'rm -rf "$work"' EXIT HUP INT TERM
     -Wa,--noexecstack -o "$work/stage2-virt.o"
 "$LD" -T "$LINKER" "$work/stage2-virt.o" -o "$work/stage2-virt"
 
-echo "QEMU Stage2Virt positive test: x-stage2-virt=on"
 timeout "${STAGE2_VIRT_TIMEOUT:-30}" "$QEMU" -M virt -display none -semihosting \
     -cpu "rv64,h=true,pmp=false,x-stage2-virt=on" \
     -device "loader,file=$work/stage2-virt"
+printf '[TEST 01] %-64s PASS\n' 'x-stage2-virt=on grants the expected VU G-stage permissions'
 
-echo "QEMU Stage2Virt negative test: x-stage2-virt=off"
 set +e
 timeout "${STAGE2_VIRT_TIMEOUT:-30}" "$QEMU" -M virt -display none -semihosting \
     -cpu "rv64,h=true,pmp=false,x-stage2-virt=off" \
@@ -50,5 +49,6 @@ if [ "$negative_rc" -eq 0 ] || [ "$negative_rc" -eq 124 ] || [ "$negative_rc" -g
     echo "Stage2Virt negative control did not fail as expected (rc=$negative_rc)" >&2
     exit 1
 fi
+printf '[TEST 02] %-64s PASS\n' 'x-stage2-virt=off rejects the Stage2Virt-only access'
 
-echo "QEMU Stage2Virt语义测试 PASS"
+echo "[SUMMARY] 2 QEMU Stage2Virt semantic tests passed"

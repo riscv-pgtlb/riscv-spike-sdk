@@ -206,7 +206,8 @@ class SuiteResultChecks(unittest.TestCase):
                                   "stage2-virt-runtime-mock.log")):
             with self.subTest(case_id=case_id), tempfile.TemporaryDirectory() as directory:
                 report = suite.Suite(Path(directory), "debian")
-                report.mark(case_id, "FAIL", "mock failure")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    report.mark(case_id, "FAIL", "mock failure")
                 info = suite.failure_info("mock failure", cases=report.cases)
                 self.assertEqual(info["code"], "STATIC_FAILURE")
                 self.assertIn(logfile, info["reason"])

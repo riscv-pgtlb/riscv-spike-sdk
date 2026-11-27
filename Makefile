@@ -400,11 +400,29 @@ virt-prepare:
 virt-verify:
 	$(VIRT_PYTHON) "$(VIRT_SCRIPT)" verify
 virt-test-static:
-	$(VIRT_PYTHON) -B -m unittest discover -s tests/pmp-virt/unit -p 'test_*.py' -v
+	@printf '\n\033[1;36m======================================================================\n'
+	@printf '[STATIC-TEST 01] SDK Python unit tests\n'
+	@printf '======================================================================\033[0m\n\n'
+	$(VIRT_PYTHON) -B "$(topdir)/tests/pmp-virt/unit/run-tests.py"
+	@printf '\n\033[1;36m======================================================================\n'
+	@printf '[STATIC-TEST 02] QEMU Stage2Virt semantic test\n'
+	@printf '======================================================================\033[0m\n\n'
 	sh "$(topdir)/tests/G-stage-virt/check-stage2-virt-qemu.sh"
+	@printf '\n\033[1;36m======================================================================\n'
+	@printf '[STATIC-TEST 03] PMP.Virt kvmtool SBI mock tests\n'
+	@printf '======================================================================\033[0m\n\n'
 	$(VIRT_PYTHON) -B "$(topdir)/repo/kvmtool/tests/pmp-virt-test.py"
+	@printf '\n\033[1;36m======================================================================\n'
+	@printf '[STATIC-TEST 04] Stage2Virt configuration mock tests\n'
+	@printf '======================================================================\033[0m\n\n'
 	$(VIRT_PYTHON) -B "$(topdir)/repo/kvmtool/tests/stage2-virt-test.py"
+	@printf '\n\033[1;36m======================================================================\n'
+	@printf '[STATIC-TEST 05] Stage2Virt runtime SBI mock tests\n'
+	@printf '======================================================================\033[0m\n\n'
 	$(VIRT_PYTHON) -B "$(topdir)/repo/kvmtool/tests/stage2-virt-runtime-test.py"
+	@printf '\n\033[1;32m======================================================================\n'
+	@printf '[STATIC-SUMMARY] 5/5 static test groups passed\n'
+	@printf '======================================================================\033[0m\n'
 
 # Virt 总汇总测试；包含 PMP.Virt 与 Stage2Virt，默认双 Debian。
 VIRT_SYSTEM ?= debian
