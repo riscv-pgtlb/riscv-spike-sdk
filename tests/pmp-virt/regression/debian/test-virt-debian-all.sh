@@ -43,10 +43,10 @@ log_dir=$(mktemp -d /var/log/virt-regression/debian-XXXXXX)
 echo "Evidence: $log_dir"
 
 script -q -e -c \
-  "/usr/bin/lkvm run --pmp-virt-test --name debian-inner \
+  "/usr/bin/lkvm run --pmp-virt-test --stage2-virt-test --name debian-inner \
   -k /opt/guest/Image -d '$disk' \
   -m 768 -c 1 --console serial -n mode=none \
-  -p 'console=ttyS0 root=/dev/vda1 rw rootwait maxcpus=1 virt_regression=1 pmpvirt_guest_test=1 virt_tools_version=$guest_version'" \
+  -p 'console=ttyS0 root=/dev/vda1 rw rootwait maxcpus=1 virt_regression=1 pmpvirt_guest_test=1 stage2virt_guest_test=1 virt_tools_version=$guest_version'" \
   "$log_dir/guest-console.log"
 
 tr -d '\r' < "$log_dir/guest-console.log" \

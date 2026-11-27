@@ -261,6 +261,10 @@ class BuildChecks(unittest.TestCase):
                             for call in copier.call_args_list))
         self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/check-stage2-virt-host")
                             for call in copier.call_args_list))
+        self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/stage2-virt-guest-test")
+                            for call in copier.call_args_list))
+        self.assertTrue(any(str(call.args[1]).endswith("/usr/local/bin/check-stage2-virt-guest")
+                            for call in copier.call_args_list))
 
     def test_host_headers_install_uses_kernel_output_tree(self):
         source = self.root / "repo/linux"
@@ -291,8 +295,10 @@ class BuildChecks(unittest.TestCase):
         for args, enabled in (([], False), (["--regression"], True)):
             actual = subprocess.check_output(["sh", str(wrapper), *args], text=True).splitlines()
             self.assertEqual("--pmp-virt-test" in actual, enabled)
+            self.assertEqual("--stage2-virt-test" in actual, enabled)
             cmdline = actual[actual.index("-p") + 1]
             self.assertEqual("pmpvirt_guest_test=1" in cmdline, enabled)
+            self.assertEqual("stage2virt_guest_test=1" in cmdline, enabled)
 
     def test_guest_config_requires_probe_but_not_kvm(self):
         source = self.root / "repo/linux-guest"
@@ -301,13 +307,16 @@ class BuildChecks(unittest.TestCase):
         required = ("BLK_DEV_INITRD", "DEVTMPFS", "SERIAL_8250_CONSOLE", "VIRTIO_MMIO",
                     "STRICT_KERNEL_RWX", "VIRTIO_BLK", "VIRTIO_NET", "EXT4_FS", "NET", "INET")
         base = "".join(f"CONFIG_{symbol}=y\n" for symbol in required)
-        config.write_text(base + "CONFIG_RISCV_PMP_VIRT_GUEST_TEST=y\n")
+        config.write_text(base + "CONFIG_RISCV_PMP_VIRT_GUEST_TEST=y\n"
+                          "CONFIG_RISCV_STAGE2_VIRT_GUEST_TEST=y\n")
         with patch.object(build, "verify_source", return_value=source), patch.object(build, "run") as commands:
             build.configure_linux("linux-guest", "test-")
             self.assertTrue(any(call.args[0][-2:] == ["--enable", "RISCV_PMP_VIRT_GUEST_TEST"]
                                 for call in commands.call_args_list))
-            config.write_text(base)
-            with self.assertRaisesRegex(RuntimeError, "RISCV_PMP_VIRT_GUEST_TEST"):
+            self.assertTrue(any(call.args[0][-2:] == ["--enable", "RISCV_STAGE2_VIRT_GUEST_TEST"]
+                                for call in commands.call_args_list))
+            config.write_text(base + "CONFIG_RISCV_PMP_VIRT_GUEST_TEST=y\n")
+            with self.assertRaisesRegex(RuntimeError, "RISCV_STAGE2_VIRT_GUEST_TEST"):
                 build.configure_linux("linux-guest", "test-")
 
     def stale_kvmtool(self, dirty=False):

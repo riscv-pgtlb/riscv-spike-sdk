@@ -4,12 +4,12 @@ set -eu
 extra=''
 case "${1:-}" in
     '') ;;
-    --regression) extra=' virt_regression=1 pmpvirt_guest_test=1' ;;
+    --regression) extra=' virt_regression=1 pmpvirt_guest_test=1 stage2virt_guest_test=1' ;;
     *) echo 'Usage: run-virt-guest [--regression]' >&2; exit 2 ;;
 esac
 set --
 if [ -n "$extra" ]; then
-    set -- --pmp-virt-test
+    set -- --pmp-virt-test --stage2-virt-test
 fi
 /usr/bin/check-virt-host
 for input in /usr/bin/lkvm /opt/guest/Image /opt/guest/rootfs.cpio.gz; do

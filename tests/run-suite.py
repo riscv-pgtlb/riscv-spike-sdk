@@ -33,6 +33,7 @@ RUNTIME_CASES = (
     ("sbi_after", "封存后 SBI 接口限制检查（9/9）"),
     ("host_before", "guest 启动前：host、HU–HS–HU 同页及 syscall 检查"),
     ("vs_hs", "VS–HS–VS 同物理页执行权限对照"),
+    ("stage2_guest", "Linux Guest Stage2Virt VU–VS–VU 同页测试"),
     ("guest", "guest 内核、内存与时钟推进"),
     ("guest_shutdown", "guest 自动关机请求"),
     ("guest_return", "guest 正常退出并返回 host"),
@@ -42,6 +43,7 @@ RUNTIME_CASES = (
 HOST_PASS = "VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, syscall API, syscall attack, /dev/kvm"
 USER_PASS = "PMP.Virt USER SUMMARY: PASS U-success / HS-access-fault / U-success"
 STAGE2_KVMTOOL_PASS = "Kvmtool Stage2Virt ioctl smoke PASS"
+STAGE2_GUEST_PASS = "Linux Guest Stage2Virt VU-VS-VU runtime test PASS"
 
 
 def display_path(path):
@@ -101,6 +103,33 @@ def vs_hs_same_page(lines):
     return result.returncode == 0
 
 
+def stage2_guest_same_page(lines):
+    prefix = r"(?:[A-Za-z0-9_.-]+\[\d+\]: )?"
+    patterns = (
+        prefix + r"Stage2Virt Guest VU BEFORE PASS: GPA=(0x[0-9a-fA-F]+) value=0x5a",
+        prefix + r"Stage2Virt Guest VS PROBE PASS: GPA=(0x[0-9a-fA-F]+) expected-access-fault",
+        prefix + r"Stage2Virt Guest VU AFTER PASS: GPA=(0x[0-9a-fA-F]+) value=0xa5",
+        prefix + r"Stage2Virt Guest VU-VS-VU SAME-PAGE PASS: GPA=(0x[0-9a-fA-F]+)",
+        prefix + re.escape(STAGE2_GUEST_PASS),
+    )
+    position = 0
+    expected_gpa = None
+    for pattern in patterns:
+        matches = [(index, re.fullmatch(pattern, line))
+                   for index, line in enumerate(lines)]
+        matches = [(index, match) for index, match in matches if match]
+        if len(matches) != 1 or matches[0][0] < position:
+            return False
+        position = matches[0][0] + 1
+        if matches[0][1].lastindex:
+            gpa = matches[0][1].group(1).lower()
+            if expected_gpa is None:
+                expected_gpa = gpa
+            elif gpa != expected_gpa:
+                return False
+    return True
+
+
 SYSCALL_SUMMARIES = (
     "SYSCALL-API SUMMARY: PASS 12/12 rejection cases",
     "SYSCALL-ATTACK API: PASS 2/2 rejection checks",
@@ -150,6 +179,7 @@ def runtime_results(text, expected_versions=None):
     if before is not None and returned is not None and before < returned:
         guest = lines[before + 1:returned]
         outcomes["vs_hs"] = vs_hs_same_page(guest)
+        outcomes["stage2_guest"] = stage2_guest_same_page(guest)
         check = r"(?:check-virt-guest\[\d+\]: )?VIRT-REGRESSION GUEST PASS"
         shutdown = r"(?:echo\[\d+\]: )?VIRT-REGRESSION GUEST SHUTDOWN"
         outcomes["guest"] = ordered(guest, (check,))
@@ -169,9 +199,10 @@ def runtime_results(text, expected_versions=None):
     outcomes["runtime"] = ordered(lines, tuple(re.escape(marker) for marker in (
         "VIRT-REGRESSION HOST BEFORE PASS", "VIRT-REGRESSION GUEST RETURNED",
         "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS")))
-    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL|Host Linux Stage2Virt selftest FAIL", text):
+    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL|Host Linux Stage2Virt selftest FAIL|Stage2Virt Guest .*FAIL", text):
         outcomes["runtime"] = False
         outcomes["vs_hs"] = False
+        outcomes["stage2_guest"] = False
     return outcomes
 
 
@@ -268,6 +299,7 @@ def failure_info(error, transcript="", cases=()):
             "static": "static.log",
             "pmp_virt_mock": "pmp-virt-mock.log",
             "stage2_virt_mock": "stage2-virt-mock.log",
+            "stage2_virt_runtime_mock": "stage2-virt-runtime-mock.log",
             "artifacts": "verify.log",
         }
         if failed and failed["id"] in preflight_logs:
@@ -445,7 +477,8 @@ class Suite:
         self.cases = [{"id": key, "name": name, "status": "SKIP", "detail": "未执行"}
                       for key, name in (("static", "SDK 单元测试"),
                                         ("pmp_virt_mock", "PMP.Virt kvmtool mock 测试"),
-                                        ("stage2_virt_mock", "Stage2Virt kvmtool mock 测试"),
+                                        ("stage2_virt_mock", "Stage2Virt配置接口 mock 测试"),
+                                        ("stage2_virt_runtime_mock", "Stage2Virt运行时握手 mock 测试"),
                                         ("stage2_virt", "QEMU Stage2Virt语义测试"),
                                         ("artifacts", "构建产物完整性与内核—固件配对"),
                                         ("environment", "运行环境与磁盘可用性"), *RUNTIME_CASES,
@@ -538,11 +571,13 @@ class LiveRuntimeReporter:
         "VIRT TOOLS VERSION", "PASS U execute", "PASS HS denied", "PMP.Virt USER SUMMARY:",
         "SYSCALL-", "VIRT-KVM HOST CHECK PASS:", "PMP.Virt VS ", " Info: PMP.Virt VS/HS ",
         "PMP.Virt VS-HS-VS ", "VIRT-REGRESSION ",
+        "Stage2Virt Guest ", "Linux Guest Stage2Virt ",
     )
     RUN_LABELS = {
         "stage2_host": "Host Linux KVM Stage2Virt运行时测试",
         "stage2_kvmtool": "kvmtool Stage2Virt真实 ioctl 测试",
         "vs_hs": "启动内层 guest，执行 VS–HS–VS 测试",
+        "stage2_guest": "验证 Linux Guest Stage2Virt VU–VS–VU 同页权限",
         "guest_return": "内层 guest 正在 poweroff，等待返回 host",
         "host_after": "guest 已返回，执行 host 返回后复测",
         "shutdown": "外层 Debian 正在 poweroff，等待 QEMU 退出",
@@ -554,7 +589,7 @@ class LiveRuntimeReporter:
         ("PMP.Virt VS AFTER PASS:", "HS 探测完成，VS 再次执行通过"),
         ("PMP.Virt VS/HS COMPLETE:", "VS–HS–VS 五阶段证据已收集完成"),
     )
-    LOG_EVIDENCE_CASES = {"stage2_host", "stage2_kvmtool", "vs_hs"}
+    LOG_EVIDENCE_CASES = {"stage2_host", "stage2_kvmtool", "vs_hs", "stage2_guest"}
 
     def __init__(self, suite, log_path=None):
         self.suite = suite
@@ -657,6 +692,11 @@ def main():
         suite.command("stage2_virt_mock",
                       [sys.executable, "-B", str(ROOT / "repo/kvmtool/tests/stage2-virt-test.py")],
                       "stage2-virt-mock.log", announce=True)
+        phase = "stage2_virt_runtime_mock"
+        suite.command("stage2_virt_runtime_mock",
+                      [sys.executable, "-B",
+                       str(ROOT / "repo/kvmtool/tests/stage2-virt-runtime-test.py")],
+                      "stage2-virt-runtime-mock.log", announce=True)
         phase = "stage2_virt"
         suite.command("stage2_virt", ["sh", str(ROOT / "tests/G-stage-virt/check-stage2-virt-qemu.sh")],
                       "stage2-virt.log", timeout=120, announce=True)

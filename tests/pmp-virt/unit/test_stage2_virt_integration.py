@@ -8,6 +8,8 @@ ROOT = Path(__file__).resolve().parents[3]
 CPU = "rv64,h=true,smepmp=off,x-pmp-virt=on,x-stage2-virt=on"
 SMOKE_SOURCE = "tests/G-stage-virt/check-stage2-virt-kvmtool.sh"
 SMOKE_TARGET = "/usr/local/bin/check-stage2-virt-kvmtool"
+CONFIG_MOCK = "repo/kvmtool/tests/stage2-virt-test.py"
+RUNTIME_MOCK = "repo/kvmtool/tests/stage2-virt-runtime-test.py"
 
 
 def source(path):
@@ -43,6 +45,16 @@ class Stage2VirtProjectIntegration(unittest.TestCase):
         manifest = source("scripts/debian/install/tool-manifest.py")
         self.assertIn(SMOKE_SOURCE, manifest)
         self.assertIn(SMOKE_TARGET, manifest)
+
+    def test_stage2_virt_kvmtool_mocks_are_independent_suite_cases(self):
+        makefile = source("Makefile")
+        self.assertIn(CONFIG_MOCK, makefile)
+        self.assertIn(RUNTIME_MOCK, makefile)
+        suite = source("tests/run-suite.py")
+        self.assertIn(CONFIG_MOCK, suite)
+        self.assertIn(RUNTIME_MOCK, suite)
+        self.assertIn('(\"stage2_virt_mock\", \"Stage2Virt配置接口 mock 测试\")', suite)
+        self.assertIn('(\"stage2_virt_runtime_mock\", \"Stage2Virt运行时握手 mock 测试\")', suite)
 
 
 if __name__ == "__main__":

@@ -30,6 +30,8 @@ SCRIPT_INPUTS = ("scripts/build/virt-kvm.py", "scripts/buildroot/run-virt-guest.
                  "tests/G-stage-virt/check-stage2-virt-qemu.sh",
                  "tests/G-stage-virt/check-stage2-virt-host.sh",
                  "tests/G-stage-virt/check-stage2-virt-kvmtool.sh",
+                 "tests/G-stage-virt/check-stage2-virt-guest.sh",
+                 "tests/G-stage-virt/stage2-virt-guest-test.c",
                  "tests/run-suite.py")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
@@ -356,6 +358,7 @@ def configure_linux(name, cross):
     for symbol in ("VIRTUALIZATION", "KVM"):
         run(config + ["--enable" if name == "linux-host" else "--disable", symbol])
     run(config + ["--enable" if name == "linux-guest" else "--disable", "RISCV_PMP_VIRT_GUEST_TEST"])
+    run(config + ["--enable" if name == "linux-guest" else "--disable", "RISCV_STAGE2_VIRT_GUEST_TEST"])
     run(config + ["--set-str", "LOCALVERSION", "-pmpvirt-kvm-host" if name == "linux-host" else "-virt-kvm-guest"])
     run(config + ["--disable", "LOCALVERSION_AUTO"])
     run(config + ["--set-str", "INITRAMFS_SOURCE", ""])
@@ -373,6 +376,7 @@ def configure_linux(name, cross):
         fail("The ordinary guest must not enable KVM")
     if name == "linux-guest":
         expected.append("CONFIG_RISCV_PMP_VIRT_GUEST_TEST=y")
+        expected.append("CONFIG_RISCV_STAGE2_VIRT_GUEST_TEST=y")
     for setting in expected:
         if setting not in content.splitlines():
             fail(f"Required {name} config missing: {setting}")
@@ -439,6 +443,19 @@ def build_host_selftest(cross):
     elf_machine(test, 243)
 
 
+def build_guest_runtime_test(cross):
+    source = verify_source("linux-guest")
+    kernel_output = private_path(WORK / "out/linux-guest")
+    headers = private_path(WORK / "out/linux-guest-headers")
+    output = private_path(WORK / "out/stage2-virt-guest-test")
+    run(["make", "-C", source, f"O={kernel_output}", "ARCH=riscv",
+         f"INSTALL_HDR_PATH={headers}", "headers_install"])
+    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-Werror", "-static",
+         "-isystem", headers / "include",
+         ROOT / "tests/G-stage-virt/stage2-virt-guest-test.c", "-o", output])
+    elf_machine(output, 243)
+
+
 def append_archive(base, staging, destination):
     with gzip.open(base, "rb") as stream:
         while stream.read(1024 * 1024):
@@ -485,6 +502,7 @@ def package_rootfs(base):
     images.mkdir(parents=True, exist_ok=True)
     elf_machine(WORK / "src/kvmtool/lkvm-static", 243)
     elf_machine(WORK / "out/pv-user-test", 243)
+    elf_machine(WORK / "out/stage2-virt-guest-test", 243)
     for name in ("syscall-api", "syscall-attack"):
         elf_machine(WORK / "out" / ("pv-" + name), 243)
     with tempfile.TemporaryDirectory(prefix="pack-", dir=WORK) as temporary:
@@ -493,6 +511,10 @@ def package_rootfs(base):
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("\n::sysinit:/bin/echo VIRT-KVM GUEST BOOTED\n")
         install(ROOT / "tests/pmp-virt/runtime/check-virt-guest.sh", staging / "usr/bin/check-virt-guest", True)
+        install(WORK / "out/stage2-virt-guest-test",
+                staging / "usr/bin/stage2-virt-guest-test", True)
+        install(ROOT / "tests/G-stage-virt/check-stage2-virt-guest.sh",
+                staging / "usr/local/bin/check-stage2-virt-guest", True)
         install(ROOT / "tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
         with (staging / "etc/inittab").open("a") as stream:
             stream.write("::sysinit:/usr/bin/virt-guest-autorun\n")
@@ -526,6 +548,7 @@ def artifact_paths():
         "out/linux-guest/arch/riscv/boot/Image", "out/linux-guest/.config",
         "out/opensbi/platform/generic/firmware/fw_jump.bin", "out/opensbi/platform/generic/kconfig/.config",
         "out/qemu/qemu-system-riscv64", "out/pv-user-test",
+        "out/stage2-virt-guest-test",
         "out/kvm-selftests/riscv/stage2_virt_test",
         "out/pv-syscall-api", "out/pv-syscall-attack", "src/kvmtool/lkvm-static",
         "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"
@@ -598,6 +621,7 @@ def build(jobs):
         source, output = configure_linux(name, cross)
         run(["make", "-C", source, f"O={output}", "ARCH=riscv", f"CROSS_COMPILE={cross}", f"-j{jobs}", "Image"])
     build_host_selftest(cross)
+    build_guest_runtime_test(cross)
     build_firmware(cross, jobs)
     qemu_source = verify_source("qemu")
     qemu_output = private_path(WORK / "out/qemu")

@@ -404,6 +404,7 @@ virt-test-static:
 	sh "$(topdir)/tests/G-stage-virt/check-stage2-virt-qemu.sh"
 	$(VIRT_PYTHON) -B "$(topdir)/repo/kvmtool/tests/pmp-virt-test.py"
 	$(VIRT_PYTHON) -B "$(topdir)/repo/kvmtool/tests/stage2-virt-test.py"
+	$(VIRT_PYTHON) -B "$(topdir)/repo/kvmtool/tests/stage2-virt-runtime-test.py"
 
 # Virt 总汇总测试；包含 PMP.Virt 与 Stage2Virt，默认双 Debian。
 VIRT_SYSTEM ?= debian

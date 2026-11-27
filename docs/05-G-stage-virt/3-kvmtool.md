@@ -227,7 +227,13 @@ mock 单元测试的作用是：
 
 不启动 QEMU、不运行 RISC-V Host、不访问真实 /dev/kvm，先验证 kvmtool 的 Stage2Virt 配置逻辑是否正确。
 
-新增文件：[stage2-virt-test.py](../../repo/kvmtool/tests/stage2-virt-test.py)
+新增配置接口测试：[stage2-virt-test.py](../../repo/kvmtool/tests/stage2-virt-test.py)
+
+新增运行时握手测试：[stage2-virt-runtime-test.py](../../repo/kvmtool/tests/stage2-virt-runtime-test.py)
+
+两份测试分别接入 `make virt-test-static` 和统一测试套件，作为独立测试项并
+分别输出 `stage2-virt-mock.log` 与 `stage2-virt-runtime-mock.log`，用于区分
+底层 KVM ioctl 封装故障和上层 Guest SBI 会话故障。
 
 加入 make virt-test-static
 ### 3.2 SDK
@@ -250,5 +256,14 @@ lkvm
   -检查 Buildroot 和 Debian 打包清单都包含该脚本；
   -防止以后新增或重构入口时漏掉 Stage2Virt。
 
-**接入回归测试**：PMP.Virt kvmtool mock 和 Stage2Virt kvmtool mock 分别作为第 2、3 项，
-真实 kvmtool ioctl 冒烟测试作为第 8 项。统一测试共 22 项，三个检查都有独立结果和日志。
+**接入回归测试**：PMP.Virt kvmtool mock、Stage2Virt 配置接口 mock 和
+Stage2Virt 运行时握手 mock 分别作为第 2、3、4 项，真实 kvmtool ioctl
+冒烟测试作为第 9 项。统一测试共 23 项，各项都有独立结果和日志。
+
+
+## 4 新增修改
+> 测试页是动态分配的，GPA 启动后才知道，而目前 kvmtool 在启动 Guest 前配置 Stage2Virt GPA
+>
+> 因此需要增加 Guest→kvmtool 的运行时握手，在 Guest 报告 GPA 后调用 Stage2Virt ioctl，同步修改kvmtool
+
+具体修改过程在 guest linux 修改过程中

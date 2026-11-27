@@ -12,4 +12,5 @@ before=$(awk '{ print int($1) }' /proc/uptime)
 sleep 2
 after=$(awk '{ print int($1) }' /proc/uptime)
 test "$after" -ge "$((before + 2))"
+/usr/local/bin/check-stage2-virt-guest
 echo 'VIRT-REGRESSION GUEST PASS'
