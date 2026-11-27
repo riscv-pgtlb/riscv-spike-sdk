@@ -28,6 +28,7 @@ HOST = (
 GUEST = (
     ("tests/pmp-virt/runtime/check-virt-guest.sh", None, "0755", "/usr/local/bin/check-virt-guest"),
     ("build/virt-kvm/out/stage2-virt-guest-test", "payload/stage2-virt-guest-test", "0755", "/usr/bin/stage2-virt-guest-test"),
+    ("build/virt-kvm/out/stage2-virt-syscall-attack", "payload/stage2-virt-syscall-attack", "0755", "/usr/bin/stage2-virt-syscall-attack"),
     ("tests/G-stage-virt/check-stage2-virt-guest.sh", None, "0755", "/usr/local/bin/check-stage2-virt-guest"),
     ("tests/pmp-virt/regression/debian/virt-guest-test.service", None, "0644", "/etc/systemd/system/virt-guest-test.service"),
     ("scripts/debian/update/update-guest-tools.sh", None, "0755", "/usr/local/bin/update-guest-tools"),

@@ -32,6 +32,7 @@ SCRIPT_INPUTS = ("scripts/build/virt-kvm.py", "scripts/buildroot/run-virt-guest.
                  "tests/G-stage-virt/check-stage2-virt-kvmtool.sh",
                  "tests/G-stage-virt/check-stage2-virt-guest.sh",
                  "tests/G-stage-virt/stage2-virt-guest-test.c",
+                 "tests/G-stage-virt/stage2-virt-syscall-attack.c",
                  "tests/run-suite.py")
 DISABLED = ("MODULES", "JUMP_LABEL", "FUNCTION_TRACER", "FUNCTION_GRAPH_TRACER", "DYNAMIC_FTRACE", "FTRACE", "KPROBES", "LIVEPATCH", "BPF_JIT", "RANDOMIZE_BASE", "KEXEC", "KEXEC_FILE", "KGDB")
 
@@ -454,6 +455,12 @@ def build_guest_runtime_test(cross):
          "-isystem", headers / "include",
          ROOT / "tests/G-stage-virt/stage2-virt-guest-test.c", "-o", output])
     elf_machine(output, 243)
+    attack_output = private_path(WORK / "out/stage2-virt-syscall-attack")
+    run([cross + "gcc", "-O2", "-Wall", "-Wextra", "-Werror", "-static",
+         "-isystem", headers / "include",
+         ROOT / "tests/G-stage-virt/stage2-virt-syscall-attack.c",
+         "-o", attack_output])
+    elf_machine(attack_output, 243)
 
 
 def append_archive(base, staging, destination):
@@ -503,6 +510,7 @@ def package_rootfs(base):
     elf_machine(WORK / "src/kvmtool/lkvm-static", 243)
     elf_machine(WORK / "out/pv-user-test", 243)
     elf_machine(WORK / "out/stage2-virt-guest-test", 243)
+    elf_machine(WORK / "out/stage2-virt-syscall-attack", 243)
     for name in ("syscall-api", "syscall-attack"):
         elf_machine(WORK / "out" / ("pv-" + name), 243)
     with tempfile.TemporaryDirectory(prefix="pack-", dir=WORK) as temporary:
@@ -513,6 +521,8 @@ def package_rootfs(base):
         install(ROOT / "tests/pmp-virt/runtime/check-virt-guest.sh", staging / "usr/bin/check-virt-guest", True)
         install(WORK / "out/stage2-virt-guest-test",
                 staging / "usr/bin/stage2-virt-guest-test", True)
+        install(WORK / "out/stage2-virt-syscall-attack",
+                staging / "usr/bin/stage2-virt-syscall-attack", True)
         install(ROOT / "tests/G-stage-virt/check-stage2-virt-guest.sh",
                 staging / "usr/local/bin/check-stage2-virt-guest", True)
         install(ROOT / "tests/pmp-virt/regression/buildroot/virt-guest-autorun.sh", staging / "usr/bin/virt-guest-autorun", True)
@@ -549,6 +559,7 @@ def artifact_paths():
         "out/opensbi/platform/generic/firmware/fw_jump.bin", "out/opensbi/platform/generic/kconfig/.config",
         "out/qemu/qemu-system-riscv64", "out/pv-user-test",
         "out/stage2-virt-guest-test",
+        "out/stage2-virt-syscall-attack",
         "out/kvm-selftests/riscv/stage2_virt_test",
         "out/pv-syscall-api", "out/pv-syscall-attack", "src/kvmtool/lkvm-static",
         "generated/pmp_virt_layout.h", "images/host-rootfs.cpio.gz", "images/guest-rootfs.cpio.gz"

@@ -19,7 +19,8 @@ EVIDENCE = (
 
 
 class Stage2VirtGuestChecker(unittest.TestCase):
-    def run_checker(self, lines, exit_code=0):
+    def run_checker(self, lines, exit_code=0, attack_exit_code=0,
+                    attack_summary=True):
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / "stage2-virt-guest-test"
             body = "#!/bin/sh\n" + "\n".join(
@@ -27,8 +28,17 @@ class Stage2VirtGuestChecker(unittest.TestCase):
             body += f"\nexit {exit_code}\n"
             binary.write_text(body)
             binary.chmod(0o755)
+            attack = Path(directory) / "stage2-virt-syscall-attack"
+            attack.write_text("#!/bin/sh\n"
+                              "echo 'STAGE2-SYSCALL-ATTACK API: PASS 2/2 rejection checks'\n"
+                              "for round in 1 2 3; do echo \"STAGE2-SYSCALL-ATTACK PASS VS-store round=$round cause=15 bytes=unchanged\"; done\n"
+                              + ("echo 'STAGE2-SYSCALL-ATTACK SUMMARY: PASS 3/3 checks (3 rounds x 1 case)'\n"
+                                 if attack_summary else "")
+                              + f"exit {attack_exit_code}\n")
+            attack.chmod(0o755)
             environment = dict(os.environ,
                                STAGE2_VIRT_GUEST_TEST=str(binary),
+                               STAGE2_VIRT_ATTACK_TEST=str(attack),
                                STAGE2_VIRT_GUEST_DEVICE="/dev/null")
             return subprocess.run(["sh", str(CHECKER)], env=environment,
                                   text=True, capture_output=True)
@@ -54,6 +64,12 @@ class Stage2VirtGuestChecker(unittest.TestCase):
         result = self.run_checker(EVIDENCE, exit_code=1)
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("runtime test PASS", result.stdout)
+
+    def test_attack_failure_or_missing_summary_is_not_accepted(self):
+        self.assertNotEqual(
+            self.run_checker(EVIDENCE, attack_exit_code=1).returncode, 0)
+        self.assertNotEqual(
+            self.run_checker(EVIDENCE, attack_summary=False).returncode, 0)
 
 
 if __name__ == "__main__":

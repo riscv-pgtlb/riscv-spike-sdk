@@ -49,6 +49,14 @@ STAGE2_GUEST_EVIDENCE = (
     suite.STAGE2_GUEST_PASS,
 )
 
+STAGE2_ATTACK_EVIDENCE = (
+    "STAGE2-SYSCALL-ATTACK API: PASS 2/2 rejection checks",
+    *(f"STAGE2-SYSCALL-ATTACK PASS VS-store round={round} cause=15 bytes=unchanged"
+      for round in range(1, 4)),
+    "STAGE2-SYSCALL-ATTACK SUMMARY: PASS 3/3 checks (3 rounds x 1 case)",
+    suite.STAGE2_ATTACK_PASS,
+)
+
 def transcript():
     lines = ["Host Linux Stage2Virt selftest PASS",
              suite.STAGE2_KVMTOOL_PASS,
@@ -60,7 +68,7 @@ def transcript():
         lines += [f"PMP.Virt SBI GUARD PASS {phase} {name} probe=0 error=-2 buffer=unchanged"
                   for name in suite.GUARDS]
     lines += [same_page(), "VIRT-REGRESSION HOST BEFORE PASS",
-              *VS_HS_EVIDENCE, *STAGE2_GUEST_EVIDENCE,
+              *VS_HS_EVIDENCE, *STAGE2_GUEST_EVIDENCE, *STAGE2_ATTACK_EVIDENCE,
               "VIRT-REGRESSION GUEST PASS", "VIRT-REGRESSION GUEST SHUTDOWN",
               "VIRT-REGRESSION GUEST RETURNED", same_page(),
               "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS"]
@@ -87,13 +95,14 @@ class SuiteResultChecks(unittest.TestCase):
             self.assertIn("[TEST 09] [PASS] kvmtool Stage2Virt真实 ioctl 测试", text)
             self.assertIn("[TEST 17] [PASS] VS–HS–VS 同物理页执行权限对照", text)
             self.assertIn("[TEST 18] [PASS] Linux Guest Stage2Virt VU–VS–VU 同页测试", text)
-            self.assertIn("[TEST 24] [PASS] 测试命令与 QEMU 正常退出", text)
+            self.assertIn("[TEST 19] [PASS] Linux Guest Stage2Virt syscall attack 测试", text)
+            self.assertIn("[TEST 25] [PASS] 测试命令与 QEMU 正常退出", text)
             self.assertNotIn("internal evidence.log", text)
-            footer = f"结果：PASS（24/24）\n耗时：12.50 秒\n证据目录：{folder}\n"
+            footer = f"结果：PASS（25/25）\n耗时：12.50 秒\n证据目录：{folder}\n"
             self.assertTrue(text.endswith(footer))
             self.assertTrue((folder / "summary.txt").read_text().endswith(footer))
             state = json.loads((folder / "result.json").read_text())
-            self.assertEqual(state["counts"], {"total": 24, "passed": 24, "failed": 0, "skipped": 0})
+            self.assertEqual(state["counts"], {"total": 25, "passed": 25, "failed": 0, "skipped": 0})
             self.assertEqual(state["cases"][0]["detail"], "internal evidence.log")
 
     def test_failure_footer_keeps_actual_counts_and_diagnostics(self):
@@ -106,11 +115,11 @@ class SuiteResultChecks(unittest.TestCase):
                 self.assertFalse(report.finish())
             text = output.getvalue()
             self.assertIn("失败阶段：", text)
-            self.assertIn("结果：FAIL（0/24）", text)
+            self.assertIn("结果：FAIL（0/25）", text)
             state = json.loads((Path(directory) / "result.json").read_text())
             self.assertEqual(state["counts"]["failed"], 1)
-            self.assertEqual(state["counts"]["skipped"], 23)
-            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 24)
+            self.assertEqual(state["counts"]["skipped"], 24)
+            self.assertEqual(len(re.findall(r"\[TEST \d{2}\]", text)), 25)
 
     def test_vs_hs_raw_carriage_return_between_result_and_host_printk(self):
         host = ("[   40.193687] PMP.Virt USER PTE: flags=247168eb required=b user=0 write=0\n"
@@ -190,13 +199,14 @@ class SuiteResultChecks(unittest.TestCase):
     def test_vs_hs_follows_host_before_and_precedes_guest_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             cases = suite.Suite(Path(directory), "debian").cases
-        self.assertEqual(len(cases), 24)
+        self.assertEqual(len(cases), 25)
         self.assertEqual(next(c["number"] for c in cases if c["id"] == "pmp_virt_mock"), 2)
         self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_virt_mock"), 3)
         self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_virt_runtime_mock"), 4)
         self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_kvmtool"), 9)
         self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_guest"), 18)
-        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 24)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "stage2_syscall_attack"), 19)
+        self.assertEqual(next(c["number"] for c in cases if c["id"] == "shutdown"), 25)
         self.assertEqual(next(c["number"] for c in cases if c["id"] == "vs_hs"), 17)
 
     def test_mock_failures_have_independent_preflight_diagnostics(self):
@@ -236,6 +246,22 @@ class SuiteResultChecks(unittest.TestCase):
             STAGE2_GUEST_EVIDENCE[0] + "\n" + STAGE2_GUEST_EVIDENCE[0])
         self.assertFalse(suite.runtime_results(duplicate)["stage2_guest"])
 
+    def test_stage2_syscall_attack_has_independent_strict_evidence(self):
+        self.assertTrue(suite.runtime_results(transcript())["stage2_syscall_attack"])
+        for line in STAGE2_ATTACK_EVIDENCE:
+            with self.subTest(missing=line):
+                results = suite.runtime_results(transcript().replace(line + "\n", ""))
+                self.assertFalse(results["stage2_syscall_attack"])
+        reordered = transcript().replace(
+            STAGE2_ATTACK_EVIDENCE[1] + "\n" + STAGE2_ATTACK_EVIDENCE[2],
+            STAGE2_ATTACK_EVIDENCE[2] + "\n" + STAGE2_ATTACK_EVIDENCE[1])
+        self.assertFalse(suite.runtime_results(reordered)["stage2_syscall_attack"])
+        failed = suite.runtime_results(
+            transcript() + "STAGE2-SYSCALL-ATTACK FAIL injected\n")
+        self.assertTrue(failed["stage2_guest"])
+        self.assertFalse(failed["stage2_syscall_attack"])
+        self.assertFalse(failed["runtime"])
+
     def test_live_runtime_reporter_emits_each_pass_once_then_runs_shutdown(self):
         with tempfile.TemporaryDirectory() as directory:
             report = suite.Suite(Path(directory), "debian")
@@ -251,6 +277,7 @@ class SuiteResultChecks(unittest.TestCase):
         self.assertIn("[TEST 08] [RUN ] Host Linux KVM Stage2Virt运行时测试", text)
         self.assertIn("[TEST 17] [RUN ] 启动内层 guest，执行 VS–HS–VS 测试", text)
         self.assertIn("[TEST 18] [RUN ] 验证 Linux Guest Stage2Virt VU–VS–VU 同页权限", text)
+        self.assertIn("[TEST 19] [RUN ] 执行 Linux Guest Stage2Virt syscall attack 测试", text)
         self.assertLess(text.index("内层 guest 已启动，VS 首次执行通过"),
                         text.index("[PASS] VS–HS–VS 同物理页执行权限对照"))
         self.assertLess(text.index("证据日志："),

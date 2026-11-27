@@ -2,6 +2,7 @@
 set -eu
 
 TEST_BIN=${STAGE2_VIRT_GUEST_TEST:-/usr/bin/stage2-virt-guest-test}
+ATTACK_BIN=${STAGE2_VIRT_ATTACK_TEST:-/usr/bin/stage2-virt-syscall-attack}
 DEVICE=${STAGE2_VIRT_GUEST_DEVICE:-/dev/stage2_virt_test}
 
 test -c "$DEVICE" || {
@@ -53,3 +54,11 @@ END { if (stage != 4) exit 1 }
 }
 
 echo 'Linux Guest Stage2Virt VU-VS-VU runtime test PASS'
+
+test -x "$ATTACK_BIN" || { echo "Missing Stage2Virt syscall attack test: $ATTACK_BIN" >&2; exit 1; }
+attack_output=$($ATTACK_BIN)
+printf '%s\n' "$attack_output"
+printf '%s\n' "$attack_output" | grep -Fxq 'STAGE2-SYSCALL-ATTACK API: PASS 2/2 rejection checks'
+test "$(printf '%s\n' "$attack_output" | grep -Ec '^STAGE2-SYSCALL-ATTACK PASS VS-store round=[123] cause=15 bytes=unchanged$')" -eq 3
+printf '%s\n' "$attack_output" | grep -Fxq 'STAGE2-SYSCALL-ATTACK SUMMARY: PASS 3/3 checks (3 rounds x 1 case)'
+echo 'Linux Guest Stage2Virt syscall attack test PASS'

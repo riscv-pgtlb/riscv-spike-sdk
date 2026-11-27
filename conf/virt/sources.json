@@ -8,7 +8,7 @@
     },
     "linux-guest": {
       "path": "repo/linux-guest",
-      "revision": "eb0b925e4e4e4faf625089dc9ce445d9f9ba2685",
+      "revision": "ca8a52b1c23777a09b71307d38d6f39cace75ef3",
       "url": "https://github.com/riscv-pgtlb/linux.git"
     },
     "opensbi": {

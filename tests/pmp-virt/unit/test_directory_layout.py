@@ -23,6 +23,7 @@ class PackageLayoutChecks(unittest.TestCase):
         for relative in ("build/virt-kvm/src/kvmtool/lkvm-static", "build/virt-kvm/out/pv-user-test",
                          "build/virt-kvm/out/pv-syscall-api", "build/virt-kvm/out/pv-syscall-attack",
                          "build/virt-kvm/out/stage2-virt-guest-test",
+                         "build/virt-kvm/out/stage2-virt-syscall-attack",
                          "build/virt-kvm/out/kvm-selftests/riscv/stage2_virt_test",
                          "build/virt-kvm/out/linux-guest/arch/riscv/boot/Image"):
             path = self.root / relative
@@ -84,6 +85,7 @@ class PackageLayoutChecks(unittest.TestCase):
             self.assertTrue((installed / "usr/local/bin/update-guest-tools").is_file())
             self.assertTrue((installed / "usr/local/bin/check-virt-guest").is_file())
             self.assertTrue((installed / "usr/bin/stage2-virt-guest-test").is_file())
+            self.assertTrue((installed / "usr/bin/stage2-virt-syscall-attack").is_file())
             self.assertTrue((installed / "usr/local/bin/check-stage2-virt-guest").is_file())
             self.assertTrue((installed / "etc/systemd/system/virt-guest-test.service").is_file())
 

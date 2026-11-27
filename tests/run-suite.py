@@ -34,6 +34,7 @@ RUNTIME_CASES = (
     ("host_before", "guest 启动前：host、HU–HS–HU 同页及 syscall 检查"),
     ("vs_hs", "VS–HS–VS 同物理页执行权限对照"),
     ("stage2_guest", "Linux Guest Stage2Virt VU–VS–VU 同页测试"),
+    ("stage2_syscall_attack", "Linux Guest Stage2Virt syscall attack 测试"),
     ("guest", "guest 内核、内存与时钟推进"),
     ("guest_shutdown", "guest 自动关机请求"),
     ("guest_return", "guest 正常退出并返回 host"),
@@ -44,6 +45,7 @@ HOST_PASS = "VIRT-KVM HOST CHECK PASS: seal, HS 6/6, SBI guard 18/18, U/HS/U, sy
 USER_PASS = "PMP.Virt USER SUMMARY: PASS U-success / HS-access-fault / U-success"
 STAGE2_KVMTOOL_PASS = "Kvmtool Stage2Virt ioctl smoke PASS"
 STAGE2_GUEST_PASS = "Linux Guest Stage2Virt VU-VS-VU runtime test PASS"
+STAGE2_ATTACK_PASS = "Linux Guest Stage2Virt syscall attack test PASS"
 
 
 def display_path(path):
@@ -130,6 +132,25 @@ def stage2_guest_same_page(lines):
     return True
 
 
+def stage2_syscall_attack(lines):
+    prefix = r"(?:[A-Za-z0-9_.-]+\[\d+\]: )?"
+    expected = [
+        r"STAGE2-SYSCALL-ATTACK API: PASS 2/2 rejection checks",
+        *(rf"STAGE2-SYSCALL-ATTACK PASS VS-store round={round} cause=15 bytes=unchanged"
+          for round in range(1, 4)),
+        r"STAGE2-SYSCALL-ATTACK SUMMARY: PASS 3/3 checks \(3 rounds x 1 case\)",
+        re.escape(STAGE2_ATTACK_PASS),
+    ]
+    position = 0
+    for evidence in expected:
+        matches = [index for index, line in enumerate(lines)
+                   if re.fullmatch(prefix + evidence, line)]
+        if len(matches) != 1 or matches[0] < position:
+            return False
+        position = matches[0] + 1
+    return True
+
+
 SYSCALL_SUMMARIES = (
     "SYSCALL-API SUMMARY: PASS 12/12 rejection cases",
     "SYSCALL-ATTACK API: PASS 2/2 rejection checks",
@@ -180,6 +201,7 @@ def runtime_results(text, expected_versions=None):
         guest = lines[before + 1:returned]
         outcomes["vs_hs"] = vs_hs_same_page(guest)
         outcomes["stage2_guest"] = stage2_guest_same_page(guest)
+        outcomes["stage2_syscall_attack"] = stage2_syscall_attack(guest)
         check = r"(?:check-virt-guest\[\d+\]: )?VIRT-REGRESSION GUEST PASS"
         shutdown = r"(?:echo\[\d+\]: )?VIRT-REGRESSION GUEST SHUTDOWN"
         outcomes["guest"] = ordered(guest, (check,))
@@ -199,10 +221,14 @@ def runtime_results(text, expected_versions=None):
     outcomes["runtime"] = ordered(lines, tuple(re.escape(marker) for marker in (
         "VIRT-REGRESSION HOST BEFORE PASS", "VIRT-REGRESSION GUEST RETURNED",
         "VIRT-REGRESSION HOST AFTER PASS", "VIRT-REGRESSION ALL PASS")))
-    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|SYSCALL-ATTACK FAIL|SYSCALL-API FAIL|Host Linux Stage2Virt selftest FAIL|Stage2Virt Guest .*FAIL", text):
+    if re.search(r"PMP\.Virt .*FAIL|PMP\.Virt seal FATAL|VIRT-REGRESSION FAIL|Kernel panic|(?<!STAGE2-)SYSCALL-ATTACK FAIL|SYSCALL-API FAIL|Host Linux Stage2Virt selftest FAIL|Stage2Virt Guest .*FAIL", text):
         outcomes["runtime"] = False
         outcomes["vs_hs"] = False
         outcomes["stage2_guest"] = False
+        outcomes["stage2_syscall_attack"] = False
+    if "STAGE2-SYSCALL-ATTACK FAIL" in text:
+        outcomes["runtime"] = False
+        outcomes["stage2_syscall_attack"] = False
     return outcomes
 
 
@@ -578,6 +604,7 @@ class LiveRuntimeReporter:
         "stage2_kvmtool": "kvmtool Stage2Virt真实 ioctl 测试",
         "vs_hs": "启动内层 guest，执行 VS–HS–VS 测试",
         "stage2_guest": "验证 Linux Guest Stage2Virt VU–VS–VU 同页权限",
+        "stage2_syscall_attack": "执行 Linux Guest Stage2Virt syscall attack 测试",
         "guest_return": "内层 guest 正在 poweroff，等待返回 host",
         "host_after": "guest 已返回，执行 host 返回后复测",
         "shutdown": "外层 Debian 正在 poweroff，等待 QEMU 退出",
@@ -589,7 +616,8 @@ class LiveRuntimeReporter:
         ("PMP.Virt VS AFTER PASS:", "HS 探测完成，VS 再次执行通过"),
         ("PMP.Virt VS/HS COMPLETE:", "VS–HS–VS 五阶段证据已收集完成"),
     )
-    LOG_EVIDENCE_CASES = {"stage2_host", "stage2_kvmtool", "vs_hs", "stage2_guest"}
+    LOG_EVIDENCE_CASES = {"stage2_host", "stage2_kvmtool", "vs_hs", "stage2_guest",
+                          "stage2_syscall_attack"}
 
     def __init__(self, suite, log_path=None):
         self.suite = suite

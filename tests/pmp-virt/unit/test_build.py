@@ -263,6 +263,8 @@ class BuildChecks(unittest.TestCase):
                             for call in copier.call_args_list))
         self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/stage2-virt-guest-test")
                             for call in copier.call_args_list))
+        self.assertTrue(any(str(call.args[1]).endswith("/usr/bin/stage2-virt-syscall-attack")
+                            for call in copier.call_args_list))
         self.assertTrue(any(str(call.args[1]).endswith("/usr/local/bin/check-stage2-virt-guest")
                             for call in copier.call_args_list))
 
